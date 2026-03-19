@@ -4,6 +4,33 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Банкети · ОГОнь</title>
 <link rel="stylesheet" href="style.css">
+<style>
+/* Mobile: tbl-row as card — label+value pairs */
+@media (max-width: 768px) {
+  .tbl-row-mobile {
+    display: flex !important;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border-radius: var(--radius) !important;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    margin-bottom: 0;
+    cursor: pointer;
+    transition: border-color .2s;
+  }
+  .tbl-row-mobile:hover { border-color: var(--border2); background: var(--surface2); }
+  .tmr-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .tmr-name { font-size: 15px; font-weight: 700; color: var(--text); }
+  .tmr-date { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+  .tmr-meta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+  .tmr-phone { font-size: 12px; color: var(--text-muted); }
+  .tmr-guests { font-size: 12px; color: var(--text-dim); font-weight: 700; }
+  .tmr-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .tmr-deposit { font-size: 12px; color: var(--text-dim); }
+  .tmr-total { font-family: var(--fh); font-size: 15px; font-weight: 700; color: var(--accent); }
+}
+</style>
 </head>
 <body>
 <div class="top-bar">
@@ -36,7 +63,8 @@
     <button class="filter-tab" data-f="cancelled" onclick="setFilter(this)">❌ Скасовані</button>
   </div>
 
-  <div class="tbl-wrap">
+  <!-- Desktop table -->
+  <div class="tbl-wrap desktop-tbl">
     <div class="tbl-head" style="grid-template-columns:108px 1fr 140px 72px 120px 130px 100px">
       <div class="th">Дата</div><div class="th">Клієнт</div><div class="th">Телефон</div>
       <div class="th">Гостей</div><div class="th">Залог</div><div class="th">Підсумок</div><div class="th">Статус</div>
@@ -45,9 +73,20 @@
       <div class="loader-wrap"><div class="loader-dots"><span></span><span></span><span></span></div></div>
     </div>
   </div>
+
+  <!-- Mobile cards -->
+  <div class="mobile-cards" id="mobileCards" style="display:none">
+    <div class="loader-wrap"><div class="loader-dots"><span></span><span></span><span></span></div></div>
+  </div>
+
   <div class="pagination" id="pagination" style="display:none"></div>
   <div class="page-info" id="pageInfo"></div>
 </div>
+
+<style>
+@media (min-width: 769px) { .mobile-cards { display: none !important; } }
+@media (max-width: 768px) { .desktop-tbl { display: none !important; } .mobile-cards { display: flex !important; flex-direction: column; gap: 8px; } }
+</style>
 
 <div class="toast" id="toast"></div>
 <script src="db.js"></script>
@@ -63,6 +102,7 @@ async function init() {
     applyFilter();
   } catch(err) {
     document.getElementById('tblBody').innerHTML = `<div class="loader-wrap" style="color:var(--text-muted)">⚠️ Помилка завантаження</div>`;
+    document.getElementById('mobileCards').innerHTML = `<div class="loader-wrap" style="color:var(--text-muted)">⚠️ Помилка завантаження</div>`;
     showToast('⚠️ ' + err.message);
   }
 }
@@ -81,15 +121,19 @@ function applyFilter() {
 }
 
 function render() {
-  const body=document.getElementById('tblBody'), total=filtered.length;
+  const total=filtered.length;
   const pages=Math.ceil(total/PAGE_SIZE), start=(cp-1)*PAGE_SIZE, slice=filtered.slice(start,start+PAGE_SIZE);
   document.getElementById('pageSub').textContent = `${total} банкетів`;
+
   if (!slice.length) {
-    body.innerHTML = '<div class="loader-wrap" style="color:var(--text-muted)">Банкетів не знайдено 🔍</div>';
+    document.getElementById('tblBody').innerHTML = '<div class="loader-wrap" style="color:var(--text-muted)">Банкетів не знайдено 🔍</div>';
+    document.getElementById('mobileCards').innerHTML = '<div class="loader-wrap" style="color:var(--text-muted)">Банкетів не знайдено 🔍</div>';
     document.getElementById('pagination').style.display='none';
     document.getElementById('pageInfo').textContent=''; return;
   }
-  body.innerHTML = slice.map(b=>`
+
+  // Desktop table rows
+  document.getElementById('tblBody').innerHTML = slice.map(b=>`
     <div class="tbl-row" style="grid-template-columns:108px 1fr 140px 72px 120px 130px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
       <div class="td muted">${fmtDate(b.date)}</div>
       <div class="td bold">${b.clientName}</div>
@@ -98,6 +142,24 @@ function render() {
       <div class="td">${fmt(b.deposit)}</div>
       <div class="td acc mono">${fmt(b.totalFinal)}</div>
       <div class="td"><span class="status-pill ${b.status}">${statusLabel(b.status)}</span></div>
+    </div>`).join('');
+
+  // Mobile cards
+  document.getElementById('mobileCards').innerHTML = slice.map(b=>`
+    <div class="tbl-row-mobile" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
+      <div class="tmr-top">
+        <div class="tmr-name">${b.clientName}</div>
+        <div class="tmr-date">${fmtDate(b.date)}</div>
+      </div>
+      <div class="tmr-meta">
+        <span class="tmr-phone">${b.clientPhone}</span>
+        <span class="tmr-guests">👥 ${b.guests}</span>
+        <span class="status-pill ${b.status}">${statusLabel(b.status)}</span>
+      </div>
+      <div class="tmr-bottom">
+        <div class="tmr-deposit">Залог: <b style="color:var(--text)">${fmt(b.deposit)}</b></div>
+        <div class="tmr-total">${fmt(b.totalFinal)}</div>
+      </div>
     </div>`).join('');
 
   const pg=document.getElementById('pagination'), pi=document.getElementById('pageInfo');

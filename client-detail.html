@@ -4,6 +4,19 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Клієнт · ОГОнь</title>
 <link rel="stylesheet" href="style.css">
+<style>
+@media (max-width: 768px) {
+  .client-banquet-row {
+    display: flex !important;
+    flex-direction: column;
+    gap: 5px;
+    padding: 14px 16px;
+  }
+  .cbr-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .cbr-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .cbr-bottom { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border); margin-top: 4px; }
+}
+</style>
 </head>
 <body>
 <div class="top-bar">
@@ -62,6 +75,8 @@
 <script>
 db_seed(); renderOfflineBanner();
 
+const isMobile = () => window.innerWidth <= 768;
+
 async function init() {
   const id = getParam('id');
   if (!id) { showNotFound(); return; }
@@ -114,6 +129,22 @@ async function init() {
     const bl = document.getElementById('clientBanquets');
     if (!sorted.length) {
       bl.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div>Банкетів поки немає</div>`;
+    } else if (isMobile()) {
+      bl.innerHTML = sorted.map(b=>`
+        <div class="banquet-row client-banquet-row" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
+          <div class="cbr-top">
+            <div style="font-size:14px;font-weight:700;color:var(--text)">${fmtDate(b.date)}</div>
+            <span class="status-pill ${b.status}">${statusLabel(b.status)}</span>
+          </div>
+          <div class="cbr-meta">
+            <span style="font-size:12px;color:var(--text-dim)">👥 ${b.guests}</span>
+            ${b.comment?`<span style="font-size:11px;color:var(--text-muted)">${b.comment.slice(0,40)}${b.comment.length>40?'…':''}</span>`:''}
+          </div>
+          <div class="cbr-bottom">
+            <span style="font-size:12px;color:var(--text-dim)">Залог: <b style="color:var(--text)">${fmt(b.deposit)}</b></span>
+            <span style="font-family:var(--fh);font-size:15px;font-weight:700;color:var(--accent)">${fmt(b.totalFinal)}</span>
+          </div>
+        </div>`).join('');
     } else {
       bl.innerHTML = sorted.map(b=>`
         <div class="banquet-row" style="grid-template-columns:92px 1fr 72px 120px 120px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">

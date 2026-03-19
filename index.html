@@ -4,6 +4,20 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Дашборд · ОГОнь Банкети</title>
 <link rel="stylesheet" href="style.css">
+<style>
+@media (max-width: 768px) {
+  /* Banquet rows on dashboard — card style */
+  .banquet-row {
+    display: flex !important;
+    flex-direction: column;
+    gap: 5px;
+    padding: 14px 16px;
+  }
+  .dash-row-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .dash-row-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .dash-row-bottom { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border); margin-top: 4px; }
+}
+</style>
 </head>
 <body>
 <div class="top-bar">
@@ -66,6 +80,8 @@ renderOfflineBanner();
 document.getElementById('dashDate').textContent =
   new Date().toLocaleDateString('uk-UA',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
+const isMobile = () => window.innerWidth <= 768;
+
 async function render() {
   try {
     const [banquets, clients] = await Promise.all([db_getBanquets(), db_getClients()]);
@@ -80,6 +96,23 @@ async function render() {
     const list = document.getElementById('dashList');
     if (!upcoming.length) {
       list.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div>Немає запланованих банкетів</div>`;
+    } else if (isMobile()) {
+      list.innerHTML = upcoming.map(b=>`
+        <div class="banquet-row" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
+          <div class="dash-row-top">
+            <div class="br-name">${b.clientName}</div>
+            <div class="br-date">${fmtDate(b.date)}</div>
+          </div>
+          <div class="dash-row-meta">
+            <span class="br-phone">${b.clientPhone}</span>
+            <span class="br-guests">👥 ${b.guests}</span>
+            <span class="status-pill ${b.status}">${statusLabel(b.status)}</span>
+          </div>
+          <div class="dash-row-bottom">
+            <span class="br-sum">${fmt(b.deposit)}</span>
+            <span class="br-sum acc">${fmt(b.totalFinal)}</span>
+          </div>
+        </div>`).join('');
     } else {
       list.innerHTML = upcoming.map(b=>`
         <div class="banquet-row" style="grid-template-columns:100px 1fr 140px 72px 120px 130px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">

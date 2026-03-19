@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="style.css">
 <style>
 /* ════════════════════════════════════════════════
-   DESKTOP — три колонки, всі скролять всередині
+   DESKTOP — три колонки
 ════════════════════════════════════════════════ */
 body { overflow: hidden; }
 
@@ -26,10 +26,8 @@ body { overflow: hidden; }
 .add-right { padding: 18px 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; }
 
 /* ════════════════════════════════════════════════
-   MOBILE — вертикальний стек
-   Верх: форма (скролиться)
-   Середина: меню страв (фіксована висота 55vh)
-   Низ: sticky панель підсумку + кнопка
+   MOBILE ≤768px — вертикальний потік
+   Порядок: контакти → підсумок+кнопка → меню страв
 ════════════════════════════════════════════════ */
 @media (max-width: 768px) {
   body { overflow: auto; }
@@ -38,68 +36,57 @@ body { overflow: hidden; }
     display: flex;
     flex-direction: column;
     height: auto;
-    min-height: calc(100vh - 56px);
   }
 
-  /* Форма зверху — звичайний потік */
+  /* 1. Ліва колонка (форма) — без overflow, звичайний потік */
   .add-left {
     border-right: none;
     border-bottom: 1px solid var(--border);
-    height: auto;
     overflow: visible;
+    padding: 20px 16px;
     order: 1;
-    padding: 16px;
+    gap: 20px;
   }
 
-  /* Меню страв — фіксована висота, скрол всередині */
+  /* Ховаємо totals і кнопку submit всередині лівої колонки —
+     вони будуть в summary-bar після контактів */
+  .add-left .totals,
+  .add-left .btn-submit { display: none !important; }
+
+  /* 2. Summary bar — після контактів, перед меню */
+  .mobile-summary-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    order: 2;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  /* 3. Меню страв */
   .add-mid {
     border-right: none;
-    order: 2;
-    height: 55vh;
-    min-height: 320px;
-    flex-shrink: 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  /* Підсумок — sticky знизу */
-  .add-right {
     order: 3;
-    position: sticky;
-    bottom: 0;
-    z-index: 40;
-    background: var(--surface);
-    border-top: 2px solid var(--border);
-    padding: 12px 16px 16px;
-    max-height: none;
+    height: auto;
     overflow: visible;
-    /* Показуємо тільки підсумок і кнопку, ховаємо порожній стан */
-    gap: 8px;
+  }
+  .add-mid .menu-scroll {
+    overflow: visible;
+    height: auto;
+    max-height: none;
   }
 
-  /* На мобільному ховаємо "Вибрані страви" заголовок і порожній стан */
-  .add-right .panel-title { display: none; }
-  .sum-empty { display: none !important; }
+  /* Ховаємо праву колонку (десктоп summary) */
+  .add-right { display: none !important; }
 
-  /* Компактний список вибраних страв */
-  .sum-list {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-  .sum-item {
-    padding: 4px 8px;
-    font-size: 11px;
-    flex-shrink: 0;
-  }
-  .sum-item-name { font-size: 10px; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Меню страв — 2 колонки */
+  .dishes-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
 
-  .dishes-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .top-bar-nav { display: none; }
 }
 
 /* ════════════════════════════════════════════════
-   TABLET 769–1024px — вертикальний стек але ширший
+   TABLET 769–1024px
 ════════════════════════════════════════════════ */
 @media (min-width: 769px) and (max-width: 1024px) {
   body { overflow: auto; }
@@ -134,8 +121,13 @@ body { overflow: hidden; }
     padding-bottom: 32px;
   }
 
+  .mobile-summary-bar { display: none; }
   .menu-scroll { flex: 1; overflow-y: auto; }
   .dishes-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+}
+
+@media (min-width: 1025px) {
+  .mobile-summary-bar { display: none; }
 }
 
 /* ════════════════════════════════════════════════
@@ -154,11 +146,6 @@ body { overflow: hidden; }
 .tot-val { font-weight: 700; color: var(--text); }
 .tot-div { height: 1px; background: var(--border); }
 
-/* На мобільному totals ховаємо — підсумок є в sticky панелі */
-@media (max-width: 768px) {
-  .totals { display: none; }
-}
-
 .btn-submit {
   background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
   font-family: var(--fh); font-size: 12px; font-weight: 700; letter-spacing: .05em;
@@ -167,17 +154,6 @@ body { overflow: hidden; }
 }
 .btn-submit:hover { background: var(--accent2); transform: translateY(-1px); }
 .btn-submit:disabled { opacity: .6; transform: none; cursor: not-allowed; }
-
-/* На мобільному кнопка — в sticky панелі */
-@media (max-width: 768px) {
-  /* Ховаємо кнопку в лівій колонці */
-  .add-left .btn-submit { display: none; }
-  /* Показуємо мобільну sticky кнопку */
-  .mobile-submit-bar { display: flex; flex-direction: column; gap: 6px; }
-}
-@media (min-width: 769px) {
-  .mobile-submit-bar { display: none; }
-}
 
 /* Hall picker */
 .hall-btn {
@@ -239,14 +215,52 @@ body { overflow: hidden; }
 .client-hint { background: rgba(46,203,113,.08); border: 1px solid rgba(46,203,113,.2); border-radius: var(--radius); padding: 9px 12px; font-size: 12px; color: var(--green); font-weight: 600; display: none; align-items: center; gap: 8px; }
 .client-hint.show { display: flex; }
 
-/* Mobile sticky bar — підсумок */
-.mobile-sticky-total {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 0; border-bottom: 1px solid var(--border); margin-bottom: 4px;
+/* ── Mobile summary bar ── */
+.mob-totals-wrap {
+  padding: 16px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
 }
-.mobile-total-label { font-size: 11px; color: var(--text-muted); font-weight: 600; }
-.mobile-total-val { font-family: var(--fh); font-size: 18px; font-weight: 800; color: var(--accent); }
-.mobile-total-pp { font-size: 11px; color: var(--green); font-weight: 600; }
+.mob-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.mob-total-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.mob-total-val {
+  font-family: var(--fh);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.mob-total-pp {
+  font-size: 12px;
+  color: var(--green);
+  font-weight: 600;
+}
+.mob-total-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.mob-total-details .mtr { display: flex; justify-content: space-between; font-weight: 500; }
+.mob-total-details .mtr b { color: var(--text); font-weight: 700; }
+.mob-submit-wrap {
+  padding: 12px 16px 20px;
+}
 </style>
 </head>
 <body>
@@ -338,6 +352,7 @@ body { overflow: hidden; }
       </div>
     </div>
 
+    <!-- Desktop totals + submit -->
     <div class="totals">
       <div class="tot-row"><span>Страв:</span><span class="tot-val" id="t-count">0</span></div>
       <div class="tot-row"><span>Без надбавки:</span><span class="tot-val" id="t-base">0 ₴</span></div>
@@ -350,7 +365,28 @@ body { overflow: hidden; }
     <button class="btn-submit" id="submitBtn" onclick="handleSubmit()">📋 Оформити заявку</button>
   </div>
 
-  <!-- ═══ MIDDLE ═══ -->
+  <!-- ═══ MOBILE SUMMARY BAR (між формою і меню) ═══ -->
+  <div class="mobile-summary-bar">
+    <div class="mob-totals-wrap">
+      <div class="mob-total-row">
+        <div>
+          <div class="mob-total-label">Загальна сума</div>
+          <div class="mob-total-pp" id="mob-pp" style="display:none"></div>
+        </div>
+        <div class="mob-total-val" id="mob-total">0 ₴</div>
+      </div>
+      <div class="mob-total-details" id="mob-details-wrap" style="display:none">
+        <div class="mtr"><span>Страв:</span><b id="mob-count">0</b></div>
+        <div class="mtr"><span>Без надбавки:</span><b id="mob-base">0 ₴</b></div>
+        <div class="mtr" id="mob-mod-row" style="display:none"><span id="mob-mod-lbl"></span><b id="mob-mod-val"></b></div>
+      </div>
+    </div>
+    <div class="mob-submit-wrap">
+      <button class="btn-submit" id="submitBtnMob" onclick="handleSubmit()">📋 Оформити заявку</button>
+    </div>
+  </div>
+
+  <!-- ═══ MIDDLE — меню страв ═══ -->
   <div class="add-mid">
     <div class="cat-nav" id="catNav"></div>
     <div class="menu-scroll" id="menuScroll">
@@ -360,21 +396,9 @@ body { overflow: hidden; }
     </div>
   </div>
 
-  <!-- ═══ RIGHT ═══ -->
+  <!-- ═══ RIGHT — десктоп summary ═══ -->
   <div class="add-right">
     <div class="panel-title">Вибрані страви</div>
-
-    <!-- Мобільна sticky панель підсумку -->
-    <div class="mobile-submit-bar">
-      <div class="mobile-sticky-total">
-        <div>
-          <div class="mobile-total-label">Підсумок</div>
-          <div id="mob-pp" class="mobile-total-pp" style="display:none"></div>
-        </div>
-        <div class="mobile-total-val" id="mob-total">0 ₴</div>
-      </div>
-      <button class="btn-submit" id="submitBtnMob" onclick="handleSubmit()">📋 Оформити заявку</button>
-    </div>
 
     <div class="sum-empty" id="sumEmpty">
       <div class="sum-empty-icon">🍽️</div>
@@ -463,7 +487,11 @@ function dCard(d) {
 function jumpCat(id,tab) {
   document.querySelectorAll('.cat-tab').forEach(t=>t.classList.remove('active')); tab.classList.add('active');
   const el=document.getElementById(id), sc=document.getElementById('menuScroll');
-  if(el&&sc) sc.scrollTo({top:el.offsetTop-14,behavior:'smooth'});
+  if(el&&sc) {
+    // Mobile: scroll page; Desktop: scroll container
+    if(window.innerWidth<=768) el.scrollIntoView({behavior:'smooth',block:'start'});
+    else sc.scrollTo({top:el.offsetTop-14,behavior:'smooth'});
+  }
 }
 
 /* ── HALL ── */
@@ -490,6 +518,8 @@ function calcBase() {
 function calcTotals() {
   const{base,count}=calcBase(), modAmt=Math.round(base*modifier/100), final=base+modAmt;
   const guests=parseInt(document.getElementById('f-guests').value)||0;
+
+  // Desktop left panel
   document.getElementById('t-count').textContent=count;
   document.getElementById('t-base').textContent=fmt(base);
   document.getElementById('t-final').textContent=fmt(final);
@@ -499,11 +529,29 @@ function calcTotals() {
   const pp=document.getElementById('t-pp-row');
   if(guests>0&&base>0){pp.style.display='flex';document.getElementById('t-pp').textContent=fmt(Math.round(base/guests));}
   else pp.style.display='none';
-  // Мобільний sticky підсумок
+
+  // Mobile summary bar
   const mobTotal = document.getElementById('mob-total');
   const mobPp    = document.getElementById('mob-pp');
+  const mobDetailsWrap = document.getElementById('mob-details-wrap');
   if(mobTotal) mobTotal.textContent = fmt(final);
-  if(mobPp) { if(guests>0&&base>0){mobPp.textContent=`${fmt(Math.round(base/guests))} / особу`;mobPp.style.display='block';}else mobPp.style.display='none'; }
+  if(mobPp) {
+    if(guests>0&&base>0){mobPp.textContent=`${fmt(Math.round(base/guests))} / особу`;mobPp.style.display='block';}
+    else mobPp.style.display='none';
+  }
+  if(mobDetailsWrap) {
+    if(count>0) {
+      mobDetailsWrap.style.display='flex';
+      document.getElementById('mob-count').textContent=count;
+      document.getElementById('mob-base').textContent=fmt(base);
+      const mobModRow=document.getElementById('mob-mod-row');
+      if(modifier!==0){
+        mobModRow.style.display='flex';
+        document.getElementById('mob-mod-lbl').textContent=modifier>0?`Надбавка +${modifier}%:`:`Знижка ${modifier}%:`;
+        document.getElementById('mob-mod-val').textContent=(modifier>0?'+':'')+fmt(modAmt);
+      } else mobModRow.style.display='none';
+    } else mobDetailsWrap.style.display='none';
+  }
 }
 
 function calcSummary() {
@@ -548,6 +596,12 @@ async function handleSubmit() {
    {id:'f-date',eid:'fd',chk:v=>v.trim().length>0},{id:'f-guests',eid:'fg',chk:v=>parseInt(v)>0},
    {id:'f-deposit',eid:'fdep',chk:v=>v.trim().length>0&&parseFloat(v)>=0}]
   .forEach(({id,eid,chk})=>{const el=document.getElementById(id),er=document.getElementById(eid),bad=!chk(el.value);el.classList.toggle('err',bad);er.classList.toggle('show',bad);if(bad)ok=false;});
+
+  // Scroll to first error on mobile
+  if(!ok && window.innerWidth<=768) {
+    const firstErr = document.querySelector('.form-input.err');
+    if(firstErr) firstErr.scrollIntoView({behavior:'smooth',block:'center'});
+  }
 
   const sel=getSel();
   if(!sel.length){showToast('⚠️ Оберіть хоча б одну страву');ok=false;}

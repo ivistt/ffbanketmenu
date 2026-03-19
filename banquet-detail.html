@@ -34,7 +34,7 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
 
 /* ══ MODIFIER CHIPS in edit mode ══ */
 .mod-chips-wrap { display: flex; flex-direction: column; gap: 7px; }
-.mod-chips-row  { display: flex; align-items: center; gap: 8px; }
+.mod-chips-row  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .mod-chips-lbl  { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; min-width: 56px; }
 
 /* ══ DISH ROWS ══ */
@@ -79,13 +79,13 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
   background: rgba(245,200,66,.09); border: 1px solid rgba(245,200,66,.3);
   border-radius: var(--radius); padding: 9px 14px;
   font-size: 12px; font-weight: 700; color: var(--yellow);
+  margin-bottom: 16px;
 }
 .unsaved-badge.show { display: flex; }
 
-/* Edit mode action bar (sticky bottom on mobile) */
+/* Edit mode action bar */
 .edit-action-bar {
   display: flex; gap: 10px; margin-top: 20px;
-  position: sticky; bottom: 12px; z-index: 50;
 }
 .btn-cancel-edit {
   background: var(--surface2); border: 1.5px solid var(--border);
@@ -124,6 +124,16 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
   .page-header { flex-direction: column; align-items: flex-start; gap: 14px; }
   .inline-input { max-width: 100%; }
   .status-radios { gap: 6px; }
+  .info-card { padding: 16px; }
+  .edit-action-bar { flex-direction: column; }
+  .btn-cancel-edit { order: 2; text-align: center; }
+  .btn-save-all { order: 1; }
+  /* dish row edit on mobile */
+  .dish-row-edit { flex-wrap: wrap; gap: 8px; }
+  .dish-row-edit-price { display: none; }
+  .dish-row-edit-sub { min-width: 60px; }
+  /* status view wrap inline on mobile */
+  #statusViewWrap { align-self: flex-start; }
 }
 </style>
 </head>
@@ -137,7 +147,6 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
     <a class="nav-link" href="clients.html">Клієнти</a>
   </nav>
   <div class="tbs"></div>
-  <!-- Edit / Done toggle -->
   <button class="btn-ghost view-only" id="btnStartEdit" onclick="startEdit()" style="display:none">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     Редагувати
@@ -153,7 +162,6 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
       <div class="page-title" id="pageTitle">Завантаження...</div>
       <div class="page-sub" id="pageSub"></div>
     </div>
-    <!-- Status in view mode -->
     <div class="view-only" id="statusViewWrap" style="display:none">
       <div style="font-family:var(--fh);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Статус</div>
       <span class="status-pill" id="statusPillView"></span>
@@ -174,11 +182,7 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
         <!-- CLIENT CARD -->
         <div class="info-card">
           <div class="info-card-title">Клієнт</div>
-
-          <!-- View -->
           <div class="view-only" id="clientInfoView"></div>
-
-          <!-- Edit -->
           <div class="edit-only" style="display:none">
             <div class="info-row">
               <span class="info-key">Ім'я</span>
@@ -195,11 +199,7 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
         <!-- BANQUET CARD -->
         <div class="info-card">
           <div class="info-card-title">Деталі банкету</div>
-
-          <!-- View -->
           <div class="view-only" id="banquetInfoView"></div>
-
-          <!-- Edit -->
           <div class="edit-only" style="display:none">
             <div class="info-row">
               <span class="info-key">Дата</span>
@@ -211,7 +211,7 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
             </div>
             <div class="info-row" style="align-items:flex-start;gap:8px">
               <span class="info-key" style="padding-top:6px">Зал</span>
-              <div style="display:flex;gap:6px;flex:1;justify-content:flex-end">
+              <div style="display:flex;gap:6px;flex:1;justify-content:flex-end;flex-wrap:wrap">
                 <button type="button" class="hall-btn-sm active" id="e-hall-big" onclick="pickEditHall('big')" style="font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .18s;font-weight:700">🏛️ Великий</button>
                 <button type="button" class="hall-btn-sm" id="e-hall-small" onclick="pickEditHall('small')" style="font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .18s;font-weight:700">🚪 Малий</button>
               </div>
@@ -234,11 +234,7 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
         <!-- FINANCIALS CARD -->
         <div class="info-card">
           <div class="info-card-title">Фінанси</div>
-
-          <!-- View -->
           <div class="view-only" id="financialInfoView"></div>
-
-          <!-- Edit: live totals + modifier -->
           <div class="edit-only" style="display:none">
             <div style="margin-bottom:14px">
               <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">Обслуговування банкету</div>
@@ -300,16 +296,16 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
           <!-- VIEW mode dish list -->
           <div class="view-only dishes-list" id="dishesListView"></div>
 
-          <!-- EDIT mode dish list (all dishes with qty controls) -->
+          <!-- EDIT mode dish list -->
           <div class="edit-only" id="dishesListEdit" style="display:none"></div>
 
-          <!-- Totals footer (both modes) -->
+          <!-- Totals footer -->
           <div id="dishesTotalView" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)"></div>
         </div>
       </div>
 
     </div>
-  </div><!-- /detailGrid -->
+  </div>
 
   <div id="notFound" style="display:none">
     <div class="empty-state"><div class="empty-icon">❓</div>Банкет не знайдено</div>
@@ -321,7 +317,6 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
 <script>
 db_seed(); renderOfflineBanner();
 
-/* ── STATE ── */
 const BID    = getParam('id');
 let b        = null;
 let editMode = false;
@@ -329,8 +324,8 @@ let menuData = [];
 let eQty     = {};
 let eMod     = 0;
 let eStatus  = '';
+let eHall    = 'big';
 
-/* ── INIT ── */
 async function init() {
   if (!BID) { showNotFound(); return; }
   try {
@@ -368,22 +363,17 @@ async function loadMenuThenRender() {
   document.getElementById('btnStartEdit').style.display = 'inline-flex';
 }
 
-/* ══════════════════════════════════════════
-   VIEW MODE
-══════════════════════════════════════════ */
 async function renderView() {
   b = await db_getBanquet(BID);
   document.title = `Банкет · ${b.clientName} · ${fmtDate(b.date)}`;
   document.getElementById('pageTitle').textContent = `Банкет · ${b.clientName}`;
   document.getElementById('pageSub').textContent   = `${fmtDate(b.date)} · 👥 ${b.guests} гостей`;
 
-  // Status pill
   const spv = document.getElementById('statusPillView');
   spv.className = `status-pill ${b.status}`;
   spv.textContent = statusLabel(b.status);
   document.getElementById('statusViewWrap').style.display = 'block';
 
-  // Client + stats
   const [client, stats] = b.clientId
     ? await Promise.all([db_getClient(b.clientId), db_getClientStats(b.clientId)])
     : [null, null];
@@ -396,7 +386,6 @@ async function renderView() {
     ${client ? `<div style="margin-top:12px"><a href="client-detail.html?id=${client.id}" class="btn-back" style="font-size:12px;padding:7px 13px">👤 Профіль клієнта →</a></div>` : ''}
   `;
 
-  // Banquet details
   document.getElementById('banquetInfoView').innerHTML = `
     <div class="info-row"><span class="info-key">Дата</span><span class="info-val">${fmtDate(b.date)}${b.time ? ` о ${b.time}` : ''}</span></div>
     <div class="info-row"><span class="info-key">Зал</span><span class="info-val">${b.hallLabel || 'Великий зал'}</span></div>
@@ -406,7 +395,6 @@ async function renderView() {
     <div class="info-row"><span class="info-key">Створено</span><span class="info-val" style="font-weight:500;color:var(--text-dim)">${b.createdAt ? new Date(b.createdAt).toLocaleDateString('uk-UA') : '—'}</span></div>
   `;
 
-  // Financials
   const modAmt = (b.totalFinal||0) - (b.totalBase||0);
   document.getElementById('financialInfoView').innerHTML = `
     <div class="info-row"><span class="info-key">Без надбавки</span><span class="info-val">${fmt(b.totalBase)}</span></div>
@@ -415,13 +403,12 @@ async function renderView() {
     <div class="info-row"><span class="info-key">На людину</span><span class="info-val grn">${b.guests ? fmt(Math.round((b.totalBase||0) / b.guests)) : '—'}</span></div>
   `;
 
-  // Dishes — view mode
   const dishes = b.dishes || [];
   document.getElementById('dishesListView').innerHTML = !dishes.length
     ? '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Список страв не вказано</div>'
     : dishes.map(d => `
-        <div class="dish-row" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;display:flex;align-items:center;gap:12px;margin-bottom:6px">
-          <div style="flex:1;font-size:14px;font-weight:700;color:var(--text)">${d.name}</div>
+        <div class="dish-row" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px;font-size:14px;font-weight:700;color:var(--text)">${d.name}</div>
           <div style="font-size:12px;font-weight:700;color:var(--text-muted);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 11px">×${d.qty}</div>
           <div style="font-size:12px;color:var(--text-muted)">${fmt(d.price)}</div>
           <div style="font-family:var(--fh);font-size:13px;font-weight:700;color:var(--accent);min-width:72px;text-align:right">${fmt(d.price*d.qty)}</div>
@@ -436,50 +423,43 @@ function renderDishTotal() {
   const total = dishes.reduce((s,d) => s + d.price * d.qty, 0);
   const count = dishes.reduce((s,d) => s + d.qty, 0);
   document.getElementById('dishesTotalView').innerHTML = dishes.length ? `
-    <div style="display:flex;justify-content:space-between;align-items:center">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <span style="font-size:12px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em">${dishes.length} позицій · ${count} шт.</span>
       <span style="font-family:var(--fh);font-size:16px;font-weight:700;color:var(--accent)">${fmt(total)}</span>
     </div>` : '';
 }
 
-/* ══════════════════════════════════════════
-   EDIT MODE
-══════════════════════════════════════════ */
 function startEdit() {
   editMode = true;
-
-  // Snapshot current values
   eStatus = b.status;
   eMod    = b.modifier || 0;
+  eHall   = b.hall || 'big';
   eQty    = {};
-  // Pre-fill from saved dishes
   const savedDishes = b.dishes || [];
   savedDishes.forEach(d => {
     const realId = findDishIdByName(d.name) || d.id || d.name;
     eQty[realId] = d.qty;
   });
 
-  // Fill text inputs
   document.getElementById('e-name').value    = b.clientName    || '';
   document.getElementById('e-phone').value   = b.clientPhone   || '';
   document.getElementById('e-date').value    = b.date          || '';
+  document.getElementById('e-time').value    = b.time          || '';
   document.getElementById('e-guests').value  = b.guests        || '';
   document.getElementById('e-deposit').value = b.deposit       || '';
   document.getElementById('e-comment').value = b.comment       || '';
 
-  // Client link
-  // Client link (async)
+  pickEditHall(eHall);
+
   db_getClient(b.clientId).then(client => {
     document.getElementById('clientLinkWrap').innerHTML = client
       ? `<a href="client-detail.html?id=${client.id}" class="btn-back" style="font-size:12px;padding:7px 13px">👤 Профіль клієнта →</a>` : '';
   });
 
-  // Status radios
   document.querySelectorAll('.status-radio-btn').forEach(btn => {
     btn.className = `status-radio-btn${btn.dataset.s === eStatus ? ' sel-'+eStatus : ''}`;
   });
 
-  // Modifier chips
   if (eMod !== 0) {
     document.querySelectorAll('.chip').forEach(c => {
       const t = c.dataset.t, v = parseInt(c.dataset.v);
@@ -487,11 +467,8 @@ function startEdit() {
     });
   }
 
-  // Render edit dish list
   renderEditDishes();
   recalc();
-
-  // Switch DOM classes
   setMode('edit');
 }
 
@@ -511,10 +488,19 @@ function setMode(m) {
   document.getElementById('statusViewWrap').style.display = m==='view' ? 'block' : 'none';
 }
 
-/* ── EDIT DISHES LIST ── */
+function pickEditHall(hall) {
+  eHall = hall;
+  const big = document.getElementById('e-hall-big');
+  const small = document.getElementById('e-hall-small');
+  if(!big||!small) return;
+  const onStyle = 'font-size:11px;padding:5px 10px;border-radius:8px;background:rgba(232,87,42,.1);border:1.5px solid var(--accent);color:var(--accent);cursor:pointer;font-weight:700';
+  const offStyle = 'font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;font-weight:700';
+  big.setAttribute('style', hall==='big' ? onStyle : offStyle);
+  small.setAttribute('style', hall==='small' ? onStyle : offStyle);
+}
+
 function renderEditDishes() {
   const el = document.getElementById('dishesListEdit');
-  // Flatten all dishes from menu
   const allDishes = menuData.flatMap(cat => cat.dishes);
   el.innerHTML = allDishes.map(d => {
     const qty = eQty[d.id] || 0;
@@ -545,7 +531,6 @@ function editChgQty(id, delta, price) {
   renderDishTotal();
 }
 
-/* ── MODIFIER ── */
 function pickMod(chip) {
   const was = chip.classList.contains('s-on') || chip.classList.contains('d-on');
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
@@ -556,7 +541,6 @@ function pickMod(chip) {
   markUnsaved(); recalc();
 }
 
-/* ── STATUS ── */
 function pickStatus(btn) {
   eStatus = btn.dataset.s;
   document.querySelectorAll('.status-radio-btn').forEach(b => {
@@ -565,7 +549,6 @@ function pickStatus(btn) {
   markUnsaved();
 }
 
-/* ── LIVE RECALC ── */
 function recalc() {
   const base   = calcEditBase();
   const modAmt = Math.round(base * eMod / 100);
@@ -610,7 +593,6 @@ function markUnsaved() {
   document.getElementById('unsavedBadge').classList.add('show');
 }
 
-/* ── SAVE ── */
 async function saveAll() {
   const name    = document.getElementById('e-name').value.trim();
   const phone   = document.getElementById('e-phone').value.trim();
@@ -636,12 +618,12 @@ async function saveAll() {
   try {
     await db_updateBanquet(BID, {
       clientName: name, clientPhone: phone, date, guests, deposit, comment,
+      hall: eHall, hallLabel: eHall==='big'?'Великий зал':'Малий зал',
       status: eStatus, modifier: eMod, modLabel,
       totalBase: base, totalFinal: final, dishes,
     });
     b = await db_getBanquet(BID);
 
-    // Reset chip state
     document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
     editMode = false;
     document.getElementById('unsavedBadge').classList.remove('show');
@@ -655,7 +637,6 @@ async function saveAll() {
   }
 }
 
-/* ── HELPERS ── */
 function findDishById(id) {
   for (const cat of menuData) for (const d of cat.dishes) if (d.id === id) return d;
   return null;

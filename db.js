@@ -1,20 +1,15 @@
 /* ══════════════════════════════════════════════════════════════
    db.js — Data Layer · Ресторан ОГОнь · Банкет-адмін
+   Backend: Supabase через Cloudflare Worker (ключі приховані)
 
-   ПІДКЛЮЧЕННЯ Google Sheets:
-   1. Зроби деплой appscript.js як Web App (інструкція всередині)
-   2. Встав URL нижче в SHEETS_URL
-   3. Збережи і закинь на GitHub — готово
-
-   ЯК ПРАЦЮЄ:
-   • Дані зберігаються локально (localStorage) — миттєвий інтерфейс
-   • При записі (addBanquet, updateBanquet) — надсилає у Sheets фоново
-   • Кнопка "Синхронізувати" тягне актуальні дані з Sheets у кеш
-   • Якщо Sheets недоступний — продовжує працювати офлайн
+   ПІДКЛЮЧЕННЯ:
+   1. Задеплой worker.js на Cloudflare Workers
+   2. Додай секрети у воркер: SUPABASE_URL, SUPABASE_KEY
+   3. Встав URL воркера нижче в API_URL
+   4. Готово — ніяких ключів у коді
 ══════════════════════════════════════════════════════════════ */
 
-const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzu0I7ljbIiQLXSRHG03KvPkeC3-SAHEoE3ZhWCekv4RAe-RYzeROfKQU8Wvj5_BRI/exec'; // ← вставити URL після деплою Apps Script
-                        // вигляд: https://script.google.com/macros/s/ABC.../exec
+const API_URL = ''; // ← URL твого воркера, напр. https://ogon-proxy.YOUR.workers.dev
 
 /* ── CACHE KEYS ── */
 const CK_BANQUETS = 'ogon_banquets_v2';
@@ -33,63 +28,126 @@ function cache_set(key, data) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   SHEETS API
-   Використовуємо mode:'no-cors' для запису — браузер не читає
-   відповідь, але дані доходять до Apps Script.
-   Для читання (sync) — звичайний fetch, Apps Script повертає JSON.
+   API — запити через Cloudflare Worker
 ══════════════════════════════════════════════════════════════ */
-async function sheets_write(action, body) {
-  if (!SHEETS_URL) return null;
-  try {
-    // Використовуємо form-urlencoded POST — проходить no-cors без preflight
-    // і не має обмежень на довжину URL (на відміну від GET)
-    const params = new URLSearchParams();
-    params.set('action', action);
-    params.set('payload', JSON.stringify(body));
-
-    await fetch(SHEETS_URL, {
-      method:  'POST',
-      mode:    'no-cors',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body:    params.toString(),
-    });
-    return true;
-  } catch (err) {
-    console.warn('[Sheets write]', err.message);
-    return null;
-  }
+async function api_get(table, params = '') {
+  const res = await fetch(`${API_URL}/${table}${params ? '?' + params : ''}`);
+  if (!res.ok) throw new Error(`[api_get ${table}] HTTP ${res.status}`);
+  return res.json();
 }
 
-async function sheets_read(action, params = {}) {
-  if (!SHEETS_URL) return null;
-  try {
-    const url    = new URL(SHEETS_URL);
-    url.searchParams.set('action', action);
-    Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
-    const res  = await fetch(url.toString(), { cache: 'no-store' });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error);
-    return data.data;
-  } catch (err) {
-    console.warn('[Sheets read]', err.message);
-    return null;
+async function api_insert(table, body) {
+  const res = await fetch(`${API_URL}/${table}`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+    body:    JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`[api_insert ${table}] HTTP ${res.status}: ${err}`);
   }
+  const data = await res.json();
+  return Array.isArray(data) ? data[0] : data;
+}
+
+async function api_upsert(table, body) {
+  const res = await fetch(`${API_URL}/${table}`, {
+    method:  'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=representation',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`[api_upsert ${table}] HTTP ${res.status}: ${err}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data[0] : data;
+}
+
+async function api_update(table, id, body) {
+  const res = await fetch(`${API_URL}/${table}?id=eq.${encodeURIComponent(id)}`, {
+    method:  'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+    body:    JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`[api_update ${table}] HTTP ${res.status}: ${err}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data[0] : data;
+}
+
+/* ── Конвертація snake_case (Supabase) ↔ camelCase (app) ── */
+function banquetFromSB(b) {
+  return {
+    id:          b.id,
+    clientId:    b.client_id    || '',
+    clientName:  b.client_name  || '',
+    clientPhone: b.client_phone || '',
+    date:        b.date         || '',
+    guests:      b.guests       || 0,
+    deposit:     b.deposit      || 0,
+    totalBase:   b.total_base   || 0,
+    totalFinal:  b.total_final  || 0,
+    modifier:    b.modifier     || 0,
+    modLabel:    b.mod_label    || 'без',
+    status:      b.status       || 'pending',
+    comment:     b.comment      || '',
+    dishes:      Array.isArray(b.dishes) ? b.dishes : [],
+    createdAt:   b.created_at   || '',
+  };
+}
+
+function banquetToSB(b) {
+  return {
+    id:           b.id,
+    client_id:    b.clientId    || '',
+    client_name:  b.clientName  || '',
+    client_phone: b.clientPhone || '',
+    date:         b.date        || '',
+    guests:       b.guests      || 0,
+    deposit:      b.deposit     || 0,
+    total_base:   b.totalBase   || 0,
+    total_final:  b.totalFinal  || 0,
+    modifier:     b.modifier    || 0,
+    mod_label:    b.modLabel    || 'без',
+    status:       b.status      || 'pending',
+    comment:      b.comment     || '',
+    dishes:       Array.isArray(b.dishes) ? b.dishes : [],
+    created_at:   b.createdAt   || new Date().toISOString(),
+  };
+}
+
+function clientFromSB(c) {
+  return { id: c.id, name: c.name || '', phone: c.phone || '', createdAt: c.created_at || '' };
+}
+
+function clientToSB(c) {
+  return { id: c.id, name: c.name, phone: c.phone, created_at: c.createdAt || new Date().toISOString() };
 }
 
 /* ══════════════════════════════════════════════════════════════
    BANQUETS API
 ══════════════════════════════════════════════════════════════ */
 
-/** Повертає з кешу миттєво */
 function db_getBanquetsSync() {
   return cache_get(CK_BANQUETS);
 }
 
-/** Повертає з кешу; якщо sync=true — спочатку тягне з Sheets */
 async function db_getBanquets({ sync = false } = {}) {
-  if (sync) {
-    const remote = await sheets_read('getBanquets');
-    if (remote) { cache_set(CK_BANQUETS, remote); return remote; }
+  if (sync && API_URL) {
+    try {
+      const rows = await api_get('banquets', 'order=date.desc');
+      const data = rows.map(banquetFromSB);
+      cache_set(CK_BANQUETS, data);
+      return data;
+    } catch(err) {
+      console.warn('[db_getBanquets sync]', err.message);
+    }
   }
   return cache_get(CK_BANQUETS);
 }
@@ -103,28 +161,36 @@ async function db_addBanquet(banquet) {
   banquet.createdAt = new Date().toISOString();
   banquet.status    = banquet.status || 'pending';
 
-  // 1. Зберегти в кеш (миттєво)
   const list = cache_get(CK_BANQUETS);
   list.push(banquet);
   cache_set(CK_BANQUETS, list);
 
-  // 2. Надіслати в Sheets (фоново, no-cors)
-  sheets_write('addBanquet', banquet);
+  if (API_URL) {
+    try {
+      await api_insert('banquets', banquetToSB(banquet));
+    } catch(err) {
+      console.warn('[db_addBanquet]', err.message);
+    }
+  }
 
   return banquet;
 }
 
 async function db_updateBanquet(id, updates) {
-  // 1. Оновити кеш (миттєво)
   const list = cache_get(CK_BANQUETS);
   const idx  = list.findIndex(b => b.id === id);
   if (idx === -1) throw new Error('Banquet not found: ' + id);
   const updated = { ...list[idx], ...updates };
-  list[idx]     = updated;
+  list[idx] = updated;
   cache_set(CK_BANQUETS, list);
 
-  // 2. Надіслати в Sheets (фоново, no-cors)
-  sheets_write('updateBanquet', { id, ...updates });
+  if (API_URL) {
+    try {
+      await api_update('banquets', id, banquetToSB(updated));
+    } catch(err) {
+      console.warn('[db_updateBanquet]', err.message);
+    }
+  }
 
   return updated;
 }
@@ -138,9 +204,15 @@ function db_getClientsSync() {
 }
 
 async function db_getClients({ sync = false } = {}) {
-  if (sync) {
-    const remote = await sheets_read('getClients');
-    if (remote) { cache_set(CK_CLIENTS, remote); return remote; }
+  if (sync && API_URL) {
+    try {
+      const rows = await api_get('clients', 'order=created_at.desc');
+      const data = rows.map(clientFromSB);
+      cache_set(CK_CLIENTS, data);
+      return data;
+    } catch(err) {
+      console.warn('[db_getClients sync]', err.message);
+    }
   }
   return cache_get(CK_CLIENTS);
 }
@@ -164,13 +236,17 @@ async function db_upsertClient(name, phone) {
     createdAt: new Date().toISOString(),
   };
 
-  // 1. Зберегти в кеш
   const list = cache_get(CK_CLIENTS);
   list.push(client);
   cache_set(CK_CLIENTS, list);
 
-  // 2. Надіслати в Sheets (no-cors)
-  sheets_write('upsertClient', client);
+  if (API_URL) {
+    try {
+      await api_upsert('clients', clientToSB(client));
+    } catch(err) {
+      console.warn('[db_upsertClient]', err.message);
+    }
+  }
 
   return client;
 }
@@ -192,10 +268,10 @@ function db_getClientStats(clientId) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   SEED (тільки коли немає SHEETS_URL і кеш порожній)
+   SEED — демо-дані коли API_URL не вказано
 ══════════════════════════════════════════════════════════════ */
 function db_seed() {
-  if (SHEETS_URL) return;
+  if (API_URL) return;
   if (cache_get(CK_BANQUETS).length > 0) return;
 
   const clients = [
@@ -239,12 +315,11 @@ function showToast(msg, duration = 2800) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   OFFLINE BANNER — показується коли SHEETS_URL не вказано
+   OFFLINE BANNER
 ══════════════════════════════════════════════════════════════ */
 function renderOfflineBanner() {
-  if (SHEETS_URL) return; // підключено — не показуємо
+  if (API_URL) return;
   const bar = document.createElement('div');
-  bar.id = 'offline-bar';
   bar.style.cssText = [
     'position:fixed','bottom:0','left:0','right:0',
     'background:#1a1208','border-top:1px solid rgba(232,87,42,.3)',
@@ -252,24 +327,6 @@ function renderOfflineBanner() {
     'font-weight:600','z-index:500','display:flex',
     'align-items:center','gap:12px','font-family:Manrope,sans-serif'
   ].join(';');
-  bar.innerHTML = `
-    <span>⚠️ Офлайн-режим — дані тільки в браузері цього пристрою</span>
-    <a href="#" onclick="showHowToConnect();return false"
-       style="color:var(--accent,#e8572a);text-decoration:underline;white-space:nowrap">
-      Як підключити Google Sheets?
-    </a>`;
+  bar.innerHTML = `<span>⚠️ Офлайн-режим — дані тільки в браузері цього пристрою</span>`;
   document.body.appendChild(bar);
-}
-
-function showHowToConnect() {
-  alert(
-    'Щоб підключити Google Sheets:\n\n' +
-    '1. Відкрий Google Таблицю → Розширення → Apps Script\n' +
-    '2. Вставте код з файлу appscript.js\n' +
-    '3. Деплой → Новий деплой → Веб-застосунок\n' +
-    '   Виконувати як: Я\n' +
-    '   Хто має доступ: Усі\n' +
-    '4. Скопіюйте URL деплою\n' +
-    '5. Вставте URL у db.js → const SHEETS_URL = "ВАШ_URL"'
-  );
 }

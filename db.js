@@ -9,7 +9,7 @@
    4. Готово — ніяких ключів у коді
 ══════════════════════════════════════════════════════════════ */
 
-const API_URL = 'https://dark-morning-bd95.skifchaqwerty.workers.dev/'; // ← URL твого воркера, напр. https://ogon-proxy.YOUR.workers.dev
+const API_URL = 'https://dark-morning-bd95.skifchaqwerty.workers.dev'; // ← URL твого воркера, напр. https://ogon-proxy.YOUR.workers.dev
 
 /* ── CACHE KEYS ── */
 const CK_BANQUETS = 'ogon_banquets_v2';

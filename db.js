@@ -41,12 +41,18 @@ function cache_set(key, data) {
 async function sheets_write(action, body) {
   if (!SHEETS_URL) return null;
   try {
-    // GET + no-cors — єдиний надійний спосіб з GitHub Pages.
-    // POST блокується CORS preflight. Apps Script читає через e.parameter.
-    const url = new URL(SHEETS_URL);
-    url.searchParams.set('action', action);
-    url.searchParams.set('payload', JSON.stringify(body));
-    await fetch(url.toString(), { method: 'GET', mode: 'no-cors' });
+    // Використовуємо form-urlencoded POST — проходить no-cors без preflight
+    // і не має обмежень на довжину URL (на відміну від GET)
+    const params = new URLSearchParams();
+    params.set('action', action);
+    params.set('payload', JSON.stringify(body));
+
+    await fetch(SHEETS_URL, {
+      method:  'POST',
+      mode:    'no-cors',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    params.toString(),
+    });
     return true;
   } catch (err) {
     console.warn('[Sheets write]', err.message);

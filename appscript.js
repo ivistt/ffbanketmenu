@@ -32,24 +32,43 @@ function doPost(e) {
 }
 
 function handleRequest(e) {
-  let body = {};
-  try {
-    if (e.postData && e.postData.contents) {
-      body = JSON.parse(e.postData.contents);
-    }
-  } catch (_) {}
+  let body   = {};
+  let action = '';
 
-  const action = (e.parameter && e.parameter.action) || body.action;
+  try {
+    const params = e.parameter || {};
+
+    // 1. form-urlencoded POST: payload приходить як e.parameter.payload
+    //    (Apps Script автоматично парсить urlencoded body в e.parameter)
+    if (params.payload) {
+      body   = JSON.parse(decodeURIComponent(params.payload));
+      action = params.action || body.action || '';
+    }
+    // 2. GET з payload (fallback)
+    else if (params.action) {
+      action = params.action;
+      // Нічого більше — GET без payload використовується тільки для читання
+    }
+    // 3. raw JSON POST (curl/Postman)
+    else if (e.postData && e.postData.contents) {
+      body   = JSON.parse(e.postData.contents);
+      action = body.action || '';
+    }
+  } catch (err) {
+    Logger.log('Parse error: ' + err.toString());
+  }
+
+  Logger.log('action=' + action + ' clientName=' + (body.clientName||'—'));
 
   try {
     let result;
     switch (action) {
-      case 'getBanquets':   result = getBanquets();              break;
-      case 'getBanquet':    result = getBanquet(body.id || e.parameter.id); break;
-      case 'addBanquet':    result = addBanquet(body);           break;
-      case 'updateBanquet': result = updateBanquet(body);        break;
-      case 'getClients':    result = getClients();               break;
-      case 'upsertClient':  result = upsertClient(body);         break;
+      case 'getBanquets':   result = getBanquets();       break;
+      case 'getBanquet':    result = getBanquet(body.id); break;
+      case 'addBanquet':    result = addBanquet(body);    break;
+      case 'updateBanquet': result = updateBanquet(body); break;
+      case 'getClients':    result = getClients();        break;
+      case 'upsertClient':  result = upsertClient(body);  break;
       default:
         return respond({ ok: false, error: 'Unknown action: ' + action });
     }

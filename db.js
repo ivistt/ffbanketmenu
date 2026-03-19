@@ -11,8 +11,21 @@ const API_URL = 'https://dark-morning-bd95.skifchaqwerty.workers.dev'; // ← ht
 /* ══════════════════════════════════════════════════════════════
    API — запити через Cloudflare Worker
 ══════════════════════════════════════════════════════════════ */
+
+// Бере токен із sessionStorage (туди його кладе auth.js після логіну)
+function getAuthHeaders(extra = {}) {
+  const token = sessionStorage.getItem('ogonh_token') || '';
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': token ? 'Bearer ' + token : '',
+    ...extra,
+  };
+}
+
 async function api_get(table, params = '') {
-  const res = await fetch(`${API_URL}/${table}${params ? '?' + params : ''}`);
+  const res = await fetch(`${API_URL}/${table}${params ? '?' + params : ''}`, {
+    headers: getAuthHeaders(),
+  });
   if (!res.ok) throw new Error(`[api_get ${table}] HTTP ${res.status}`);
   return res.json();
 }
@@ -20,7 +33,7 @@ async function api_get(table, params = '') {
 async function api_insert(table, body) {
   const res = await fetch(`${API_URL}/${table}`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+    headers: getAuthHeaders({ 'Prefer': 'return=representation' }),
     body:    JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`[api_insert ${table}] HTTP ${res.status}: ${await res.text()}`);
@@ -31,10 +44,7 @@ async function api_insert(table, body) {
 async function api_upsert(table, body) {
   const res = await fetch(`${API_URL}/${table}`, {
     method:  'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Prefer': 'resolution=merge-duplicates,return=representation',
-    },
+    headers: getAuthHeaders({ 'Prefer': 'resolution=merge-duplicates,return=representation' }),
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`[api_upsert ${table}] HTTP ${res.status}: ${await res.text()}`);
@@ -45,7 +55,7 @@ async function api_upsert(table, body) {
 async function api_update(table, id, body) {
   const res = await fetch(`${API_URL}/${table}?id=eq.${encodeURIComponent(id)}`, {
     method:  'PATCH',
-    headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+    headers: getAuthHeaders({ 'Prefer': 'return=representation' }),
     body:    JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`[api_update ${table}] HTTP ${res.status}: ${await res.text()}`);

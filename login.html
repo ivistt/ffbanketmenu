@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Вхід · ОГОнь Банкети</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* ── login overlay ── */
+  html, body { height: 100%; margin: 0; }
+
+  .login-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--bg, #0f0f13);
+  }
+
+  .login-card {
+    width: 100%;
+    max-width: 400px;
+    background: var(--surface, #1a1a22);
+    border: 1px solid var(--border, rgba(255,255,255,.08));
+    border-radius: 18px;
+    padding: 40px 36px 36px;
+    box-shadow: 0 24px 64px rgba(0,0,0,.45);
+    animation: fadeUp .35s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(18px); }
+    to   { opacity:1; transform:translateY(0);    }
+  }
+
+  .login-logo {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -.5px;
+    color: var(--acc, #f97316);
+    margin-bottom: 4px;
+  }
+
+  .login-sub {
+    font-size: 13px;
+    color: var(--text-dim, #888);
+    margin-bottom: 32px;
+  }
+
+  .login-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-dim, #888);
+    margin-bottom: 8px;
+  }
+
+  .login-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--bg, #0f0f13);
+    border: 1.5px solid var(--border, rgba(255,255,255,.1));
+    border-radius: 10px;
+    padding: 13px 16px;
+    font-size: 16px;
+    color: var(--text, #f0f0f0);
+    outline: none;
+    transition: border-color .2s;
+  }
+  .login-input:focus {
+    border-color: var(--acc, #f97316);
+  }
+  .login-input.error {
+    border-color: var(--red, #ef4444);
+    animation: shake .35s ease;
+  }
+  @keyframes shake {
+    0%,100% { transform:translateX(0); }
+    20%      { transform:translateX(-6px); }
+    60%      { transform:translateX(6px); }
+  }
+
+  .login-error {
+    font-size: 13px;
+    color: var(--red, #ef4444);
+    margin-top: 8px;
+    min-height: 18px;
+  }
+
+  .login-btn {
+    width: 100%;
+    margin-top: 24px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background: var(--acc, #f97316);
+    color: #fff;
+    transition: opacity .15s, transform .1s;
+    position: relative;
+  }
+  .login-btn:hover  { opacity: .9; }
+  .login-btn:active { transform: scale(.98); }
+  .login-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">🔥 ОГОнь</div>
+    <div class="login-sub">Система управління банкетами</div>
+
+    <label class="login-label" for="pwd">Пароль доступу</label>
+    <input
+      class="login-input"
+      type="password"
+      id="pwd"
+      placeholder="••••••••"
+      autocomplete="current-password"
+      autofocus
+    >
+    <div class="login-error" id="errMsg"></div>
+
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">
+      Увійти
+    </button>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+// Якщо вже залогінений — одразу переходимо далі
+(function() {
+  var token = sessionStorage.getItem("ogonh_token");
+  if (token) {
+    // перевіримо чи не протух
+    try {
+      var parts = token.split(".");
+      var payload = atob(parts[0]);
+      var exp = parseInt(payload.split(":")[1], 10);
+      if (!isNaN(exp) && Date.now() <= exp) {
+        var dest = sessionStorage.getItem("ogonh_redirect") || "index.html";
+        sessionStorage.removeItem("ogonh_redirect");
+        location.replace(dest);
+      }
+    } catch(e) {}
+  }
+})();
+
+var WORKER_URL = window.__ogonhAuth
+  ? window.__ogonhAuth.WORKER_URL
+  : "https://ogonh-auth.YOUR.workers.dev";
+
+// Enter → логін
+document.getElementById("pwd").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") doLogin();
+});
+
+async function doLogin() {
+  var pwd    = document.getElementById("pwd").value.trim();
+  var btn    = document.getElementById("loginBtn");
+  var errEl  = document.getElementById("errMsg");
+  var input  = document.getElementById("pwd");
+
+  if (!pwd) {
+    showError("Введіть пароль", input);
+    return;
+  }
+
+  // Loading state
+  btn.disabled   = true;
+  btn.innerHTML  = '<span class="spinner"></span>Перевірка...';
+  errEl.textContent = "";
+
+  try {
+    var resp = await fetch(WORKER_URL, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ password: pwd }),
+    });
+
+    var data = await resp.json();
+
+    if (data.ok && data.token) {
+      sessionStorage.setItem("ogonh_token", data.token);
+      var dest = sessionStorage.getItem("ogonh_redirect") || "index.html";
+      sessionStorage.removeItem("ogonh_redirect");
+      location.replace(dest);
+    } else {
+      showError("Невірний пароль", input);
+    }
+  } catch (e) {
+    showError("Помилка з'єднання. Перевірте інтернет.", input);
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = "Увійти";
+  }
+}
+
+function showError(msg, input) {
+  document.getElementById("errMsg").textContent = msg;
+  input.classList.add("error");
+  setTimeout(function() { input.classList.remove("error"); }, 600);
+}
+</script>
+</body>
+</html>

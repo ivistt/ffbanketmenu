@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Клієнт · ОГОнь</title>
+<script src="auth.js"></script> 
 <link rel="stylesheet" href="style.css">
 <style>
 @media (max-width: 768px) {
@@ -20,7 +21,6 @@
 </head>
 <body>
 <div class="top-bar">
-  <div class="top-bar-logo" onclick="location.href='index.html'">🔥 ОГОнь</div>
   <nav class="top-bar-nav">
     <a class="nav-link" href="index.html">Головна</a>
     <a class="nav-link" href="banquets.html">Банкети</a>
@@ -134,7 +134,7 @@ async function init() {
         <div class="banquet-row client-banquet-row" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
           <div class="cbr-top">
             <div style="font-size:14px;font-weight:700;color:var(--text)">${fmtDate(b.date)}</div>
-            <span class="status-pill ${b.status}">${statusLabel(b.status)}</span>
+            <span class="status-pill ${resolveStatus(b)}">${statusLabel(resolveStatus(b))}</span>
           </div>
           <div class="cbr-meta">
             <span style="font-size:12px;color:var(--text-dim)">👥 ${b.guests}</span>
@@ -153,7 +153,7 @@ async function init() {
           <div class="br-guests">👥 ${b.guests}</div>
           <div class="br-sum">${fmt(b.deposit)}</div>
           <div class="br-sum acc">${fmt(b.totalFinal)}</div>
-          <div><span class="status-pill ${b.status}">${statusLabel(b.status)}</span></div>
+          <div><span class="status-pill ${resolveStatus(b)}">${statusLabel(resolveStatus(b))}</span></div>
         </div>`).join('');
     }
 

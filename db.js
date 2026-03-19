@@ -337,7 +337,18 @@ if (!API_URL) {
 ══════════════════════════════════════════════════════════════ */
 function fmt(n)         { return (n || 0).toLocaleString('uk-UA') + ' ₴'; }
 function fmtDate(s)     { if (!s) return '—'; const part=(s+'').split('T')[0]; const [y,m,d]=part.split('-'); if(!d) return s; return `${d}.${m}.${y}`; }
-function statusLabel(s) { return { confirmed:'Підтверджено', pending:'Очікує', cancelled:'Скасовано' }[s] || s; }
+function statusLabel(s) { return { confirmed:'Підтверджено', passed:'Пройшов', cancelled:'Скасовано' }[s] || s; }
+/* resolveStatus — ефективний статус для відображення:
+   - cancelled → завжди cancelled
+   - дата минула і не cancelled → passed
+   - інакше → confirmed (або той що збережений) */
+function resolveStatus(b) {
+  if (b.status === 'cancelled') return 'cancelled';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const bDate = b.date ? new Date((b.date+'').split('T')[0]) : null;
+  if (bDate && bDate < today) return 'passed';
+  return 'confirmed';
+}
 function getParam(k)    { return new URLSearchParams(window.location.search).get(k); }
 function goTo(page, params) {
   const q = params ? '?' + new URLSearchParams(params).toString() : '';

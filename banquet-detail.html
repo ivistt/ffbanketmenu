@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Банкет · ОГОнь</title>
+<script src="auth.js"></script> 
 <link rel="stylesheet" href="style.css">
 <style>
 /* ══ VIEW / EDIT MODE TOGGLE ══ */
@@ -140,14 +141,13 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
 <body>
 
 <div class="top-bar">
-  <div class="top-bar-logo" onclick="location.href='index.html'">🔥 ОГОнь</div>
   <nav class="top-bar-nav">
     <a class="nav-link" href="index.html">Головна</a>
     <a class="nav-link" href="banquets.html">Банкети</a>
     <a class="nav-link" href="clients.html">Клієнти</a>
   </nav>
   <div class="tbs"></div>
-  <button class="btn-ghost view-only" id="btnStartEdit" onclick="startEdit()" style="display:none">
+  <button class="btn-ghost view-only" id="btnStartEdit" onclick="location.href='edit.html?id='+BID" style="display:none">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     Редагувати
   </button>
@@ -212,8 +212,9 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
             <div class="info-row" style="align-items:flex-start;gap:8px">
               <span class="info-key" style="padding-top:6px">Зал</span>
               <div style="display:flex;gap:6px;flex:1;justify-content:flex-end;flex-wrap:wrap">
-                <button type="button" class="hall-btn-sm active" id="e-hall-big" onclick="pickEditHall('big')" style="font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .18s;font-weight:700">🏛️ Великий</button>
-                <button type="button" class="hall-btn-sm" id="e-hall-small" onclick="pickEditHall('small')" style="font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .18s;font-weight:700">🚪 Малий</button>
+                <button type="button" class="hall-btn-sm" id="e-hall-white" onclick="pickEditHall('white')" style="font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .18s;font-weight:700">🤍 Білий</button>
+                <button type="button" class="hall-btn-sm" id="e-hall-blue" onclick="pickEditHall('blue')" style="font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .18s;font-weight:700">💙 Синій</button>
+                <button type="button" class="hall-btn-sm" id="e-hall-emerald" onclick="pickEditHall('emerald')" style="font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .18s;font-weight:700">💚 Смарагд.</button>
               </div>
             </div>
             <div class="info-row">
@@ -272,9 +273,11 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
         <div class="info-card edit-only" style="display:none">
           <div class="info-card-title">Статус</div>
           <div class="status-radios" id="statusRadios">
-            <button class="status-radio-btn" data-s="pending"   onclick="pickStatus(this)">⏳ Очікує</button>
             <button class="status-radio-btn" data-s="confirmed" onclick="pickStatus(this)">✅ Підтверджено</button>
             <button class="status-radio-btn" data-s="cancelled" onclick="pickStatus(this)">❌ Скасовано</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:10px">
+            💡 Статус «Пройшов» встановлюється автоматично після дати банкету
           </div>
         </div>
 
@@ -324,7 +327,34 @@ let menuData = [];
 let eQty     = {};
 let eMod     = 0;
 let eStatus  = '';
-let eHall    = 'big';
+let eHall    = 'white';
+let _editDirty = false;
+
+const HALLS = {
+  white:   '🤍 Білий зал',
+  blue:    '💙 Синій зал',
+  emerald: '💚 Смарагдовий зал',
+};
+
+/* ── DIRTY GUARD ── */
+window.addEventListener('beforeunload', e => {
+  if (editMode && _editDirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+document.addEventListener('click', e => {
+  const link = e.target.closest('a[href]');
+  if (!link || !editMode || !_editDirty) return;
+  const href = link.getAttribute('href');
+  if (!href || href.startsWith('#')) return;
+  e.preventDefault();
+  const ok = confirm('Є незбережені зміни. Покинути сторінку?');
+  if (ok) { _editDirty = false; editMode = false; location.href = href; }
+}, true);
+
+function markEditDirty() {
+  _editDirty = true;
+  document.getElementById('unsavedBadge').classList.add('show');
+}
 
 async function init() {
   if (!BID) { showNotFound(); return; }
@@ -370,8 +400,9 @@ async function renderView() {
   document.getElementById('pageSub').textContent   = `${fmtDate(b.date)} · 👥 ${b.guests} гостей`;
 
   const spv = document.getElementById('statusPillView');
-  spv.className = `status-pill ${b.status}`;
-  spv.textContent = statusLabel(b.status);
+  const displayStatus = resolveStatus(b);
+  spv.className = `status-pill ${displayStatus}`;
+  spv.textContent = statusLabel(displayStatus);
   document.getElementById('statusViewWrap').style.display = 'block';
 
   const [client, stats] = b.clientId
@@ -388,7 +419,7 @@ async function renderView() {
 
   document.getElementById('banquetInfoView').innerHTML = `
     <div class="info-row"><span class="info-key">Дата</span><span class="info-val">${fmtDate(b.date)}${b.time ? ` о ${b.time}` : ''}</span></div>
-    <div class="info-row"><span class="info-key">Зал</span><span class="info-val">${b.hallLabel || 'Великий зал'}</span></div>
+    <div class="info-row"><span class="info-key">Зал</span><span class="info-val">${b.hallLabel || HALLS[b.hall] || '—'}</span></div>
     <div class="info-row"><span class="info-key">Гостей</span><span class="info-val">👥 ${b.guests}</span></div>
     <div class="info-row"><span class="info-key">Залог</span><span class="info-val">${fmt(b.deposit)}</span></div>
     ${b.comment ? `<div class="info-row"><span class="info-key">Коментар</span><span class="info-val" style="font-weight:500;font-size:12px;max-width:200px;text-align:right;line-height:1.45">${b.comment}</span></div>` : ''}
@@ -430,40 +461,58 @@ function renderDishTotal() {
 }
 
 function startEdit() {
-  editMode = true;
-  eStatus = b.status;
-  eMod    = b.modifier || 0;
-  eHall   = b.hall || 'big';
-  eQty    = {};
-  const savedDishes = b.dishes || [];
-  savedDishes.forEach(d => {
-    const realId = findDishIdByName(d.name) || d.id || d.name;
-    eQty[realId] = d.qty;
+  editMode    = true;
+  _editDirty  = false;
+  // Map legacy 'pending' to 'confirmed' since pending is no longer a user-settable status
+  eStatus     = (b.status === 'cancelled') ? 'cancelled' : 'confirmed';
+  eMod        = b.modifier || 0;
+  eHall       = b.hall || 'white';
+  eQty        = {};
+
+  // Pre-fill quantities from saved dishes, matching by id then name
+  (b.dishes || []).forEach(d => {
+    const realId = findDishIdByName(d.name) || d.id;
+    if (realId) eQty[realId] = d.qty;
   });
 
-  document.getElementById('e-name').value    = b.clientName    || '';
-  document.getElementById('e-phone').value   = b.clientPhone   || '';
-  document.getElementById('e-date').value    = b.date          || '';
-  document.getElementById('e-time').value    = b.time          || '';
-  document.getElementById('e-guests').value  = b.guests        || '';
-  document.getElementById('e-deposit').value = b.deposit       || '';
-  document.getElementById('e-comment').value = b.comment       || '';
+  // Fill text inputs
+  document.getElementById('e-name').value    = b.clientName  || '';
+  document.getElementById('e-phone').value   = b.clientPhone || '';
+  document.getElementById('e-date').value    = b.date        || '';
+  document.getElementById('e-time').value    = b.time        || '';
+  document.getElementById('e-guests').value  = b.guests      || '';
+  document.getElementById('e-deposit').value = b.deposit     || '';
+  document.getElementById('e-comment').value = b.comment     || '';
+
+  // Attach dirty listeners to text inputs
+  ['e-name','e-phone','e-date','e-time','e-guests','e-deposit','e-comment'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => { markEditDirty(); if (id === 'e-guests') recalc(); }, { once: false });
+  });
 
   pickEditHall(eHall);
 
-  db_getClient(b.clientId).then(client => {
-    document.getElementById('clientLinkWrap').innerHTML = client
-      ? `<a href="client-detail.html?id=${client.id}" class="btn-back" style="font-size:12px;padding:7px 13px">👤 Профіль клієнта →</a>` : '';
-  });
+  // Client profile link
+  if (b.clientId) {
+    db_getClient(b.clientId).then(client => {
+      const wrap = document.getElementById('clientLinkWrap');
+      if (wrap) wrap.innerHTML = client
+        ? `<a href="client-detail.html?id=${client.id}" class="btn-back" style="font-size:12px;padding:7px 13px">👤 Профіль клієнта →</a>`
+        : '';
+    });
+  }
 
+  // Status radio buttons
   document.querySelectorAll('.status-radio-btn').forEach(btn => {
-    btn.className = `status-radio-btn${btn.dataset.s === eStatus ? ' sel-'+eStatus : ''}`;
+    btn.className = `status-radio-btn${btn.dataset.s === eStatus ? ' sel-' + eStatus : ''}`;
   });
 
+  // Modifier chips
   if (eMod !== 0) {
     document.querySelectorAll('.chip').forEach(c => {
       const t = c.dataset.t, v = parseInt(c.dataset.v);
-      if ((t==='s' && eMod===v) || (t==='d' && eMod===-v)) c.classList.add(t==='s'?'s-on':'d-on');
+      if ((t === 's' && eMod === v) || (t === 'd' && eMod === -v))
+        c.classList.add(t === 's' ? 's-on' : 'd-on');
     });
   }
 
@@ -473,8 +522,13 @@ function startEdit() {
 }
 
 function cancelEdit() {
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
-  editMode = false;
+  if (_editDirty) {
+    const ok = confirm('Є незбережені зміни. Скасувати редагування?');
+    if (!ok) return;
+  }
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on', 'd-on'));
+  editMode   = false;
+  _editDirty = false;
   document.getElementById('unsavedBadge').classList.remove('show');
   setMode('view');
   renderView();
@@ -482,71 +536,76 @@ function cancelEdit() {
 
 function setMode(m) {
   const wrap = document.getElementById('detailGrid');
-  wrap.classList.remove('mode-view','mode-edit');
-  wrap.classList.add('mode-'+m);
-  document.getElementById('btnStartEdit').style.display = m==='view' ? 'inline-flex' : 'none';
-  document.getElementById('statusViewWrap').style.display = m==='view' ? 'block' : 'none';
+  wrap.classList.remove('mode-view', 'mode-edit');
+  wrap.classList.add('mode-' + m);
+  document.getElementById('btnStartEdit').style.display     = m === 'view' ? 'inline-flex' : 'none';
+  document.getElementById('statusViewWrap').style.display   = m === 'view' ? 'block' : 'none';
 }
 
 function pickEditHall(hall) {
   eHall = hall;
-  const big = document.getElementById('e-hall-big');
-  const small = document.getElementById('e-hall-small');
-  if(!big||!small) return;
-  const onStyle = 'font-size:11px;padding:5px 10px;border-radius:8px;background:rgba(232,87,42,.1);border:1.5px solid var(--accent);color:var(--accent);cursor:pointer;font-weight:700';
+  const onStyle  = 'font-size:11px;padding:5px 10px;border-radius:8px;background:rgba(232,87,42,.1);border:1.5px solid var(--accent);color:var(--accent);cursor:pointer;font-weight:700';
   const offStyle = 'font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;font-weight:700';
-  big.setAttribute('style', hall==='big' ? onStyle : offStyle);
-  small.setAttribute('style', hall==='small' ? onStyle : offStyle);
+  ['white', 'blue', 'emerald'].forEach(h => {
+    const btn = document.getElementById('e-hall-' + h);
+    if (btn) btn.setAttribute('style', h === hall ? onStyle : offStyle);
+  });
+  markEditDirty();
 }
 
 function renderEditDishes() {
-  const el = document.getElementById('dishesListEdit');
+  const el        = document.getElementById('dishesListEdit');
   const allDishes = menuData.flatMap(cat => cat.dishes);
+  if (!allDishes.length) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Меню не завантажено</div>';
+    return;
+  }
   el.innerHTML = allDishes.map(d => {
     const qty = eQty[d.id] || 0;
     return `
-      <div class="dish-row-edit ${qty===0?'dish-row-edit-zero':''}" id="dre-${d.id}">
+      <div class="dish-row-edit ${qty === 0 ? 'dish-row-edit-zero' : ''}" id="dre-${d.id}">
         <div class="dish-row-edit-name">${d.name}</div>
         <div class="dish-row-edit-price">${fmt(d.price)}</div>
-        <div class="dish-qty-ctrl ${qty>0?'active':''}">
+        <div class="dish-qty-ctrl ${qty > 0 ? 'active' : ''}">
           <button class="dqb" onclick="editChgQty('${d.id}',-1,${d.price})">−</button>
           <div class="dqn" id="dreqty-${d.id}">${qty}</div>
           <button class="dqb" onclick="editChgQty('${d.id}',+1,${d.price})">+</button>
         </div>
-        <div class="dish-row-edit-sub" id="dresub-${d.id}">${qty>0?fmt(d.price*qty):'—'}</div>
+        <div class="dish-row-edit-sub" id="dresub-${d.id}">${qty > 0 ? fmt(d.price * qty) : '—'}</div>
       </div>`;
   }).join('');
 }
 
 function editChgQty(id, delta, price) {
-  eQty[id] = Math.max(0, (eQty[id]||0) + delta);
+  eQty[id] = Math.max(0, (eQty[id] || 0) + delta);
   const qty = eQty[id];
-  document.getElementById('dreqty-'+id).textContent = qty;
-  document.getElementById('dresub-'+id).textContent = qty > 0 ? fmt(price*qty) : '—';
+  document.getElementById('dreqty-' + id).textContent = qty;
+  document.getElementById('dresub-' + id).textContent = qty > 0 ? fmt(price * qty) : '—';
   const ctrl = document.querySelector(`#dre-${id} .dish-qty-ctrl`);
   if (ctrl) ctrl.classList.toggle('active', qty > 0);
-  document.getElementById('dre-'+id).classList.toggle('dish-row-edit-zero', qty === 0);
-  markUnsaved();
+  document.getElementById('dre-' + id).classList.toggle('dish-row-edit-zero', qty === 0);
+  markEditDirty();
   recalc();
   renderDishTotal();
 }
 
 function pickMod(chip) {
   const was = chip.classList.contains('s-on') || chip.classList.contains('d-on');
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on', 'd-on'));
   if (was) { eMod = 0; } else {
     eMod = chip.dataset.t === 's' ? +chip.dataset.v : -chip.dataset.v;
     chip.classList.add(chip.dataset.t === 's' ? 's-on' : 'd-on');
   }
-  markUnsaved(); recalc();
+  markEditDirty();
+  recalc();
 }
 
 function pickStatus(btn) {
   eStatus = btn.dataset.s;
   document.querySelectorAll('.status-radio-btn').forEach(b => {
-    b.className = `status-radio-btn${b.dataset.s===eStatus?' sel-'+eStatus:''}`;
+    b.className = `status-radio-btn${b.dataset.s === eStatus ? ' sel-' + eStatus : ''}`;
   });
-  markUnsaved();
+  markEditDirty();
 }
 
 function recalc() {
@@ -565,13 +624,17 @@ function recalc() {
     const mv = document.getElementById('lt-mod-val');
     mv.textContent = (eMod > 0 ? '+' : '') + fmt(modAmt);
     mv.style.color = eMod > 0 ? 'var(--accent)' : 'var(--green)';
-  } else mr.style.display = 'none';
+  } else {
+    mr.style.display = 'none';
+  }
 
   const pp = document.getElementById('lt-pp-row');
   if (guests > 0 && base > 0) {
     pp.style.display = 'flex';
     document.getElementById('lt-pp').textContent = fmt(Math.round(base / guests));
-  } else pp.style.display = 'none';
+  } else {
+    pp.style.display = 'none';
+  }
 }
 
 function calcEditBase() {
@@ -584,19 +647,16 @@ function calcEditBase() {
 
 function getAllDishesWithQty() {
   return Object.entries(eQty)
-    .filter(([,q]) => q > 0)
+    .filter(([, q]) => q > 0)
     .map(([id, qty]) => { const d = findDishById(id); return d ? { ...d, qty } : null; })
     .filter(Boolean);
-}
-
-function markUnsaved() {
-  document.getElementById('unsavedBadge').classList.add('show');
 }
 
 async function saveAll() {
   const name    = document.getElementById('e-name').value.trim();
   const phone   = document.getElementById('e-phone').value.trim();
   const date    = document.getElementById('e-date').value;
+  const time    = document.getElementById('e-time').value || '';
   const guests  = parseInt(document.getElementById('e-guests').value);
   const deposit = parseInt(document.getElementById('e-deposit').value) || 0;
   const comment = document.getElementById('e-comment').value.trim();
@@ -606,34 +666,54 @@ async function saveAll() {
     return;
   }
 
+  const allSelected = getAllDishesWithQty();
+  if (!allSelected.length) {
+    showToast('⚠️ Оберіть хоча б одну страву');
+    return;
+  }
+
   const base     = calcEditBase();
   const modAmt   = Math.round(base * eMod / 100);
   const final    = base + modAmt;
   const modLabel = eMod > 0 ? `+${eMod}%` : eMod < 0 ? `${eMod}%` : 'без';
-  const dishes   = getAllDishesWithQty().map(d => ({ id:d.id, name:d.name, qty:d.qty, price:d.price }));
+  const dishes   = allSelected.map(d => ({ id: d.id, name: d.name, qty: d.qty, price: d.price }));
 
   const btn = document.getElementById('btnSaveAll');
-  btn.disabled = true; btn.textContent = '⏳ Збереження...';
+  btn.disabled = true;
+  btn.textContent = '⏳ Збереження...';
 
   try {
     await db_updateBanquet(BID, {
-      clientName: name, clientPhone: phone, date, guests, deposit, comment,
-      hall: eHall, hallLabel: eHall==='big'?'Великий зал':'Малий зал',
-      status: eStatus, modifier: eMod, modLabel,
-      totalBase: base, totalFinal: final, dishes,
+      clientName:  name,
+      clientPhone: phone,
+      date,
+      time,
+      guests,
+      deposit,
+      comment,
+      hall:        eHall,
+      hallLabel:   HALLS[eHall] || eHall,
+      status:      eStatus,
+      modifier:    eMod,
+      modLabel,
+      totalBase:   base,
+      totalFinal:  final,
+      dishes,
     });
-    b = await db_getBanquet(BID);
 
-    document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
-    editMode = false;
+    b = await db_getBanquet(BID);
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on', 'd-on'));
+    editMode   = false;
+    _editDirty = false;
     document.getElementById('unsavedBadge').classList.remove('show');
     setMode('view');
     await renderView();
     showToast('✅ Зміни збережено');
-  } catch(err) {
+  } catch (err) {
     showToast('⚠️ Помилка: ' + err.message);
   } finally {
-    btn.disabled = false; btn.textContent = '💾 Зберегти всі зміни';
+    btn.disabled    = false;
+    btn.textContent = '💾 Зберегти всі зміни';
   }
 }
 
@@ -641,18 +721,13 @@ function findDishById(id) {
   for (const cat of menuData) for (const d of cat.dishes) if (d.id === id) return d;
   return null;
 }
+
 function findDishIdByName(name) {
   for (const cat of menuData) for (const d of cat.dishes) if (d.name === name) return d.id;
   return null;
 }
 
 init();
-
-window.addEventListener('beforeunload', e => {
-  if (editMode && document.getElementById('unsavedBadge').classList.contains('show')) {
-    e.preventDefault(); e.returnValue = '';
-  }
-});
 </script>
 </body>
 </html>

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Банкети · ОГОнь</title>
+<script src="auth.js"></script> 
 <link rel="stylesheet" href="style.css">
 <style>
 /* Mobile: tbl-row as card — label+value pairs */
@@ -34,7 +35,6 @@
 </head>
 <body>
 <div class="top-bar">
-  <div class="top-bar-logo" onclick="location.href='index.html'">🔥 ОГОнь</div>
   <nav class="top-bar-nav">
     <a class="nav-link" href="index.html">Головна</a>
     <a class="nav-link active" href="banquets.html">Банкети</a>
@@ -57,10 +57,10 @@
   </div>
 
   <div class="filter-tabs">
-    <button class="filter-tab active" data-f="all" onclick="setFilter(this)">Всі</button>
-    <button class="filter-tab" data-f="confirmed" onclick="setFilter(this)">✅ Підтверджені</button>
-    <button class="filter-tab" data-f="pending" onclick="setFilter(this)">⏳ Очікують</button>
-    <button class="filter-tab" data-f="cancelled" onclick="setFilter(this)">❌ Скасовані</button>
+    <button class="filter-tab active" data-f="all"       onclick="setFilter(this)">Всі</button>
+    <button class="filter-tab" data-f="confirmed"        onclick="setFilter(this)">✅ Підтверджені</button>
+    <button class="filter-tab" data-f="passed"           onclick="setFilter(this)">🕐 Пройшли</button>
+    <button class="filter-tab" data-f="cancelled"        onclick="setFilter(this)">❌ Скасовані</button>
   </div>
 
   <!-- Desktop table -->
@@ -115,7 +115,10 @@ function setFilter(btn) {
 function applyFilter() {
   const q = (document.getElementById('searchInput').value||'').toLowerCase();
   filtered = all
-    .filter(b => cf==='all' || b.status===cf)
+    .filter(b => {
+      if (cf === 'all') return true;
+      return resolveStatus(b) === cf;
+    })
     .filter(b => !q || b.clientName.toLowerCase().includes(q) || b.clientPhone.includes(q));
   render();
 }
@@ -133,20 +136,23 @@ function render() {
   }
 
   // Desktop table rows
-  document.getElementById('tblBody').innerHTML = slice.map(b=>`
-    <div class="tbl-row" style="grid-template-columns:108px 1fr 140px 72px 120px 130px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
+  document.getElementById('tblBody').innerHTML = slice.map(b => {
+    const st = resolveStatus(b);
+    return `<div class="tbl-row" style="grid-template-columns:108px 1fr 140px 72px 120px 130px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
       <div class="td muted">${fmtDate(b.date)}</div>
       <div class="td bold">${b.clientName}</div>
       <div class="td muted">${b.clientPhone}</div>
       <div class="td">👥 ${b.guests}</div>
       <div class="td">${fmt(b.deposit)}</div>
       <div class="td acc mono">${fmt(b.totalFinal)}</div>
-      <div class="td"><span class="status-pill ${b.status}">${statusLabel(b.status)}</span></div>
-    </div>`).join('');
+      <div class="td"><span class="status-pill ${st}">${statusLabel(st)}</span></div>
+    </div>`;
+  }).join('');
 
   // Mobile cards
-  document.getElementById('mobileCards').innerHTML = slice.map(b=>`
-    <div class="tbl-row-mobile" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
+  document.getElementById('mobileCards').innerHTML = slice.map(b => {
+    const st = resolveStatus(b);
+    return `<div class="tbl-row-mobile" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
       <div class="tmr-top">
         <div class="tmr-name">${b.clientName}</div>
         <div class="tmr-date">${fmtDate(b.date)}</div>
@@ -154,13 +160,14 @@ function render() {
       <div class="tmr-meta">
         <span class="tmr-phone">${b.clientPhone}</span>
         <span class="tmr-guests">👥 ${b.guests}</span>
-        <span class="status-pill ${b.status}">${statusLabel(b.status)}</span>
+        <span class="status-pill ${st}">${statusLabel(st)}</span>
       </div>
       <div class="tmr-bottom">
         <div class="tmr-deposit">Залог: <b style="color:var(--text)">${fmt(b.deposit)}</b></div>
         <div class="tmr-total">${fmt(b.totalFinal)}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   const pg=document.getElementById('pagination'), pi=document.getElementById('pageInfo');
   if (pages>1) {

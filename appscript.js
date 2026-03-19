@@ -1,63 +1,83 @@
 // ══════════════════════════════════════════════════════════════
-//  appscript.js  —  Ресторан ОГОнь · Банкет-адмін
-//  Вставте цей код у Google Apps Script:
-//  Google Таблиця → Розширення → Apps Script → вставити → Зберегти
-//  Деплой → New deployment → Web App
-//    Execute as: Me
-//    Who has access: Anyone
-//  Скопіюйте URL і вставте у db.js → константа SHEETS_URL
+//  appscript.js — Ресторан ОГОнь · Банкет-адмін
+//
+//  ВСТАНОВЛЕННЯ:
+//  1. Відкрий Google Таблицю → Розширення → Apps Script
+//  2. Видали весь код → вставте цей файл → Ctrl+S
+//  3. Деплой → Новий деплой → Веб-застосунок
+//     • Виконувати як:   Я (my@gmail.com)
+//     • Хто має доступ: Усі
+//  4. Натисни "Деплой" → дай дозвіл → скопіюй URL
+//  5. Встав URL у db.js → константа SHEETS_URL
+//
+//  ВАЖЛИВО: після кожної зміни коду потрібен новий деплой
+//  (Деплой → Керування деплоями → редагувати → нова версія)
 // ══════════════════════════════════════════════════════════════
 
 const SHEET_BANQUETS = 'Банкети';
 const SHEET_CLIENTS  = 'Клієнти';
 
-// ── ENTRY POINTS ──
-function doGet(e)  { return handleRequest(e); }
-function doPost(e) { return handleRequest(e); }
+// ── CORS HEADERS ──────────────────────────────────────────────
+// Apps Script підтримує CORS тільки через doGet з jsonp або
+// через спеціальний ContentService з правильними заголовками.
+// Найнадійніший спосіб для GitHub Pages — повертати JSON
+// через ContentService (браузер отримає відповідь без блокування).
 
-function handleRequest(e) {
-  // Allow CORS for browser fetch
-  const output = handleLogic(e);
-  return output;
+function doGet(e) {
+  return handleRequest(e);
 }
 
-function handleLogic(e) {
+function doPost(e) {
+  return handleRequest(e);
+}
+
+function handleRequest(e) {
   let body = {};
   try {
     if (e.postData && e.postData.contents) {
       body = JSON.parse(e.postData.contents);
     }
-  } catch(err) {}
+  } catch (_) {}
 
   const action = (e.parameter && e.parameter.action) || body.action;
 
   try {
     let result;
     switch (action) {
-      case 'getBanquets':   result = getBanquets();          break;
-      case 'getBanquet':    result = getBanquet(e.parameter.id || body.id); break;
-      case 'addBanquet':    result = addBanquet(body);       break;
-      case 'updateBanquet': result = updateBanquet(body);    break;
-      case 'getClients':    result = getClients();           break;
-      case 'upsertClient':  result = upsertClient(body);     break;
+      case 'getBanquets':   result = getBanquets();              break;
+      case 'getBanquet':    result = getBanquet(body.id || e.parameter.id); break;
+      case 'addBanquet':    result = addBanquet(body);           break;
+      case 'updateBanquet': result = updateBanquet(body);        break;
+      case 'getClients':    result = getClients();               break;
+      case 'upsertClient':  result = upsertClient(body);         break;
       default:
-        return jsonResponse({ ok: false, error: 'Unknown action: ' + action });
+        return respond({ ok: false, error: 'Unknown action: ' + action });
     }
-    return jsonResponse({ ok: true, data: result });
-  } catch(err) {
-    return jsonResponse({ ok: false, error: err.toString() });
+    return respond({ ok: true, data: result });
+  } catch (err) {
+    return respond({ ok: false, error: err.toString() });
   }
 }
 
-// ── BANQUETS ──
-const BANQUET_COLS = ['id','clientId','clientName','clientPhone','date','guests','deposit',
-                      'totalBase','totalFinal','modifier','modLabel','status','comment','dishes','createdAt'];
+// ContentService з application/json — браузер читає без CORS блокування
+function respond(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── BANQUETS ──────────────────────────────────────────────────
+const B_COLS = [
+  'id','clientId','clientName','clientPhone',
+  'date','guests','deposit','totalBase','totalFinal',
+  'modifier','modLabel','status','comment','dishes','createdAt'
+];
 
 function getBanquets() {
-  const sheet = getOrCreate(SHEET_BANQUETS, BANQUET_COLS);
-  const rows  = sheet.getDataRange().getValues();
+  const sh   = getOrCreate(SHEET_BANQUETS, B_COLS);
+  const rows = sh.getDataRange().getValues();
   if (rows.length <= 1) return [];
-  return rows.slice(1).map(rowToObj(BANQUET_COLS)).map(parseBanquet);
+  return rows.slice(1).map(r => parseBanquet(rowToObj(B_COLS, r)));
 }
 
 function getBanquet(id) {
@@ -65,23 +85,24 @@ function getBanquet(id) {
 }
 
 function addBanquet(data) {
-  const sheet = getOrCreate(SHEET_BANQUETS, BANQUET_COLS);
-  if (!data.id)        data.id        = 'b_' + Date.now();
-  if (!data.createdAt) data.createdAt = new Date().toISOString();
-  if (!data.status)    data.status    = 'pending';
-  sheet.appendRow(BANQUET_COLS.map(k => k === 'dishes' ? JSON.stringify(data[k]||[]) : (data[k]||'')));
+  const sh = getOrCreate(SHEET_BANQUETS, B_COLS);
+  data.id        = data.id        || 'b_' + Date.now();
+  data.createdAt = data.createdAt || new Date().toISOString();
+  data.status    = data.status    || 'pending';
+  sh.appendRow(objToRow(B_COLS, data));
+  styleLastRow(sh);
   return data;
 }
 
 function updateBanquet(data) {
-  const sheet = getOrCreate(SHEET_BANQUETS, BANQUET_COLS);
-  const vals  = sheet.getDataRange().getValues();
+  const sh   = getOrCreate(SHEET_BANQUETS, B_COLS);
+  const vals = sh.getDataRange().getValues();
   for (let i = 1; i < vals.length; i++) {
     if (vals[i][0] === data.id) {
-      const existing = rowToObj(BANQUET_COLS)(vals[i]);
-      const merged   = Object.assign({}, parseBanquet(existing), data);
-      sheet.getRange(i + 1, 1, 1, BANQUET_COLS.length)
-        .setValues([BANQUET_COLS.map(k => k === 'dishes' ? JSON.stringify(merged[k]||[]) : (merged[k]||''))]);
+      const existing = parseBanquet(rowToObj(B_COLS, vals[i]));
+      const merged   = Object.assign({}, existing, data);
+      sh.getRange(i + 1, 1, 1, B_COLS.length)
+        .setValues([objToRow(B_COLS, merged)]);
       return merged;
     }
   }
@@ -90,7 +111,7 @@ function updateBanquet(data) {
 
 function parseBanquet(b) {
   if (typeof b.dishes === 'string') {
-    try { b.dishes = JSON.parse(b.dishes); } catch { b.dishes = []; }
+    try { b.dishes = JSON.parse(b.dishes); } catch (_) { b.dishes = []; }
   }
   b.guests     = Number(b.guests)     || 0;
   b.deposit    = Number(b.deposit)    || 0;
@@ -100,61 +121,71 @@ function parseBanquet(b) {
   return b;
 }
 
-// ── CLIENTS ──
-const CLIENT_COLS = ['id','name','phone','createdAt'];
+// ── CLIENTS ───────────────────────────────────────────────────
+const C_COLS = ['id', 'name', 'phone', 'createdAt'];
 
 function getClients() {
-  const sheet = getOrCreate(SHEET_CLIENTS, CLIENT_COLS);
-  const rows  = sheet.getDataRange().getValues();
+  const sh   = getOrCreate(SHEET_CLIENTS, C_COLS);
+  const rows = sh.getDataRange().getValues();
   if (rows.length <= 1) return [];
-  return rows.slice(1).map(rowToObj(CLIENT_COLS));
+  return rows.slice(1).map(r => rowToObj(C_COLS, r));
 }
 
 function upsertClient(data) {
-  const sheet  = getOrCreate(SHEET_CLIENTS, CLIENT_COLS);
-  const rows   = sheet.getDataRange().getValues();
-  const normPhone = (data.phone || '').replace(/\D/g, '');
+  const sh         = getOrCreate(SHEET_CLIENTS, C_COLS);
+  const rows       = sh.getDataRange().getValues();
+  const normPhone  = (data.phone || '').replace(/\D/g, '');
 
-  // Check if exists
   for (let i = 1; i < rows.length; i++) {
     if ((rows[i][2] || '').replace(/\D/g, '') === normPhone) {
-      return rowToObj(CLIENT_COLS)(rows[i]); // return existing
+      return rowToObj(C_COLS, rows[i]); // already exists
     }
   }
 
-  // Insert new
-  if (!data.id)        data.id        = 'c_' + Date.now();
-  if (!data.createdAt) data.createdAt = new Date().toISOString();
-  sheet.appendRow(CLIENT_COLS.map(k => data[k] || ''));
+  data.id        = data.id        || 'c_' + Date.now();
+  data.createdAt = data.createdAt || new Date().toISOString();
+  sh.appendRow(objToRow(C_COLS, data));
+  styleLastRow(sh);
   return data;
 }
 
-// ── HELPERS ──
+// ── SHEET HELPERS ─────────────────────────────────────────────
 function getOrCreate(name, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sh = ss.getSheetByName(name);
+  let sh   = ss.getSheetByName(name);
   if (!sh) {
     sh = ss.insertSheet(name);
     sh.appendRow(headers);
     // Style header row
     const hRange = sh.getRange(1, 1, 1, headers.length);
-    hRange.setFontWeight('bold');
-    hRange.setBackground('#f3f3f3');
+    hRange.setFontWeight('bold')
+          .setBackground('#263238')
+          .setFontColor('#ffffff')
+          .setHorizontalAlignment('left');
     sh.setFrozenRows(1);
+    sh.setColumnWidths(1, headers.length, 160);
   }
   return sh;
 }
 
-function rowToObj(cols) {
-  return function(row) {
-    const obj = {};
-    cols.forEach((k, i) => { obj[k] = row[i]; });
-    return obj;
-  };
+function styleLastRow(sh) {
+  // Alternate row colors for readability
+  const last    = sh.getLastRow();
+  const isEven  = (last % 2 === 0);
+  const bg      = isEven ? '#F5F5F5' : '#FFFFFF';
+  sh.getRange(last, 1, 1, sh.getLastColumn()).setBackground(bg);
 }
 
-function jsonResponse(data) {
-  return ContentService
-    .createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+function rowToObj(cols, row) {
+  const obj = {};
+  cols.forEach((k, i) => { obj[k] = row[i] !== undefined ? row[i] : ''; });
+  return obj;
+}
+
+function objToRow(cols, obj) {
+  return cols.map(k => {
+    const v = obj[k];
+    if (k === 'dishes') return JSON.stringify(Array.isArray(v) ? v : []);
+    return v !== undefined && v !== null ? v : '';
+  });
 }

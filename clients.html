@@ -56,17 +56,21 @@ db_seed(); renderOfflineBanner();
 const PAGE_SIZE = 18;
 let cf='all', cp=1, all=[], filtered=[];
 
-function init() {
-  const clients  = db_getClientsSync();
-  const banquets = db_getBanquetsSync();
-  const revenue  = banquets.reduce((s,b)=>s+(b.totalFinal||0),0);
-  const repeat   = clients.filter(c=>db_getClientBanquets(c.id).length>=2);
-  document.getElementById('stTotal').textContent  = clients.length;
-  document.getElementById('stRepeat').textContent = repeat.length;
-  document.getElementById('stRev').textContent    = fmt(revenue);
-  document.getElementById('pageSub').textContent  = `${clients.length} клієнтів`;
-  all = clients.map(c=>({...c,...db_getClientStats(c.id)})).sort((a,b)=>b.count-a.count||b.total-a.total);
-  applyFilter();
+async function init() {
+  try {
+    const [clients, banquets] = await Promise.all([db_getClients(), db_getBanquets()]);
+    const revenue = banquets.reduce((s,b)=>s+(b.totalFinal||0),0);
+    const statsArr = await Promise.all(clients.map(async c => ({...c, ...await db_getClientStats(c.id)})));
+    const repeat  = statsArr.filter(c=>c.count>=2);
+    document.getElementById('stTotal').textContent  = clients.length;
+    document.getElementById('stRepeat').textContent = repeat.length;
+    document.getElementById('stRev').textContent    = fmt(revenue);
+    document.getElementById('pageSub').textContent  = `${clients.length} клієнтів`;
+    all = statsArr.sort((a,b)=>b.count-a.count||b.total-a.total);
+    applyFilter();
+  } catch(err) {
+    showToast('⚠️ ' + err.message);
+  }
 }
 
 function setFilter(btn) {
@@ -91,14 +95,12 @@ function render() {
   }
   grid.innerHTML = slice.map(c=>{
     const lastDate = c.last ? fmtDate(c.last.date) : '—';
-    const topics   = db_getClientBanquets(c.id).map(b=>b.comment).filter(Boolean);
     return `<div class="client-card" onclick="goTo('client-detail.html',{id:'${c.id}'})">
       <div class="client-card-header">
         <div class="client-avatar">${c.name.charAt(0)}</div>
         <div style="flex:1;min-width:0">
           <div class="client-name">${c.name}</div>
           <div class="client-phone">${c.phone}</div>
-          ${topics[0]?`<div style="font-size:10px;color:var(--text-muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${topics[0].slice(0,36)}${topics[0].length>36?'…':''}</div>`:''}
         </div>
       </div>
       <div class="client-stats">
@@ -126,11 +128,8 @@ function chgPage(p){cp=p;render();window.scrollTo(0,0);}
 
 async function syncAndRender() {
   showToast('🔄 Завантаження...');
-  try {
-    await db_getClients({sync:true});
-    await db_getBanquets({sync:true});
-    init(); showToast('✅ Оновлено');
-  } catch { showToast('⚠️ Помилка синхронізації'); }
+  try { await init(); showToast('✅ Оновлено'); }
+  catch { showToast('⚠️ Помилка завантаження'); }
 }
 
 init();

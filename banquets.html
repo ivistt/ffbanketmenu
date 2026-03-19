@@ -57,9 +57,14 @@ db_seed(); renderOfflineBanner();
 const PAGE_SIZE = 15;
 let cf = 'all', cp = 1, all = [], filtered = [];
 
-function init() {
-  all = db_getBanquetsSync().sort((a,b)=>new Date(b.date)-new Date(a.date));
-  applyFilter();
+async function init() {
+  try {
+    all = (await db_getBanquets()).sort((a,b)=>new Date(b.date)-new Date(a.date));
+    applyFilter();
+  } catch(err) {
+    document.getElementById('tblBody').innerHTML = `<div class="loader-wrap" style="color:var(--text-muted)">⚠️ Помилка завантаження</div>`;
+    showToast('⚠️ ' + err.message);
+  }
 }
 
 function setFilter(btn) {
@@ -112,8 +117,8 @@ function chgPage(p){cp=p;render();window.scrollTo(0,0);}
 
 async function syncAndRender() {
   showToast('🔄 Завантаження...');
-  try { await db_getBanquets({sync:true}); all=db_getBanquetsSync().sort((a,b)=>new Date(b.date)-new Date(a.date)); applyFilter(); showToast('✅ Оновлено'); }
-  catch { showToast('⚠️ Помилка синхронізації'); }
+  try { all=(await db_getBanquets()).sort((a,b)=>new Date(b.date)-new Date(a.date)); applyFilter(); showToast('✅ Оновлено'); }
+  catch { showToast('⚠️ Помилка завантаження'); }
 }
 
 init();

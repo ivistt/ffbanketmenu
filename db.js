@@ -1,31 +1,12 @@
 /* ══════════════════════════════════════════════════════════════
    db.js — Data Layer · Ресторан ОГОнь · Банкет-адмін
-   Backend: Supabase через Cloudflare Worker (ключі приховані)
+   Backend: Supabase через Cloudflare Worker
 
-   ПІДКЛЮЧЕННЯ:
-   1. Задеплой worker.js на Cloudflare Workers
-   2. Додай секрети у воркер: SUPABASE_URL, SUPABASE_KEY
-   3. Встав URL воркера нижче в API_URL
-   4. Готово — ніяких ключів у коді
+   Дані завжди тягнуться з сервера — без localStorage.
+   Встав URL свого воркера в API_URL нижче.
 ══════════════════════════════════════════════════════════════ */
 
-const API_URL = 'https://dark-morning-bd95.skifchaqwerty.workers.dev'; // ← URL твого воркера, напр. https://ogon-proxy.YOUR.workers.dev
-
-/* ── CACHE KEYS ── */
-const CK_BANQUETS = 'ogon_banquets_v2';
-const CK_CLIENTS  = 'ogon_clients_v2';
-
-/* ══════════════════════════════════════════════════════════════
-   LOCAL CACHE (localStorage)
-══════════════════════════════════════════════════════════════ */
-function cache_get(key) {
-  try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; }
-}
-function cache_set(key, data) {
-  try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) {
-    console.warn('[db] localStorage error:', e);
-  }
-}
+const API_URL = 'https://dark-morning-bd95.skifchaqwerty.workers.dev'; // ← https://your-worker.workers.dev (без слешу на кінці)
 
 /* ══════════════════════════════════════════════════════════════
    API — запити через Cloudflare Worker
@@ -42,10 +23,7 @@ async function api_insert(table, body) {
     headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
     body:    JSON.stringify(body),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`[api_insert ${table}] HTTP ${res.status}: ${err}`);
-  }
+  if (!res.ok) throw new Error(`[api_insert ${table}] HTTP ${res.status}: ${await res.text()}`);
   const data = await res.json();
   return Array.isArray(data) ? data[0] : data;
 }
@@ -59,10 +37,7 @@ async function api_upsert(table, body) {
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`[api_upsert ${table}] HTTP ${res.status}: ${err}`);
-  }
+  if (!res.ok) throw new Error(`[api_upsert ${table}] HTTP ${res.status}: ${await res.text()}`);
   const data = await res.json();
   return Array.isArray(data) ? data[0] : data;
 }
@@ -73,10 +48,7 @@ async function api_update(table, id, body) {
     headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
     body:    JSON.stringify(body),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`[api_update ${table}] HTTP ${res.status}: ${err}`);
-  }
+  if (!res.ok) throw new Error(`[api_update ${table}] HTTP ${res.status}: ${await res.text()}`);
   const data = await res.json();
   return Array.isArray(data) ? data[0] : data;
 }
@@ -89,6 +61,9 @@ function banquetFromSB(b) {
     clientName:  b.client_name  || '',
     clientPhone: b.client_phone || '',
     date:        b.date         || '',
+    time:        b.time         || '',
+    hall:        b.hall         || 'big',
+    hallLabel:   b.hall_label   || 'Великий зал',
     guests:      b.guests       || 0,
     deposit:     b.deposit      || 0,
     totalBase:   b.total_base   || 0,
@@ -109,6 +84,9 @@ function banquetToSB(b) {
     client_name:  b.clientName  || '',
     client_phone: b.clientPhone || '',
     date:         b.date        || '',
+    time:         b.time        || '',
+    hall:         b.hall        || 'big',
+    hall_label:   b.hallLabel   || 'Великий зал',
     guests:       b.guests      || 0,
     deposit:      b.deposit     || 0,
     total_base:   b.totalBase   || 0,
@@ -134,64 +112,36 @@ function clientToSB(c) {
    BANQUETS API
 ══════════════════════════════════════════════════════════════ */
 
+// Синхронна заглушка — повертає порожній масив,
+// бо без localStorage у нас немає миттєвого кешу.
+// Сторінки мають використовувати async db_getBanquets().
 function db_getBanquetsSync() {
-  return cache_get(CK_BANQUETS);
+  return [];
 }
 
-async function db_getBanquets({ sync = false } = {}) {
-  if (sync && API_URL) {
-    try {
-      const rows = await api_get('banquets', 'order=date.desc');
-      const data = rows.map(banquetFromSB);
-      cache_set(CK_BANQUETS, data);
-      return data;
-    } catch(err) {
-      console.warn('[db_getBanquets sync]', err.message);
-    }
-  }
-  return cache_get(CK_BANQUETS);
+async function db_getBanquets() {
+  const rows = await api_get('banquets', 'order=date.desc');
+  return rows.map(banquetFromSB);
 }
 
-function db_getBanquet(id) {
-  return cache_get(CK_BANQUETS).find(b => b.id === id) || null;
+async function db_getBanquet(id) {
+  const rows = await api_get('banquets', `id=eq.${encodeURIComponent(id)}`);
+  return rows.length ? banquetFromSB(rows[0]) : null;
 }
 
 async function db_addBanquet(banquet) {
   banquet.id        = 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
   banquet.createdAt = new Date().toISOString();
   banquet.status    = banquet.status || 'pending';
-
-  const list = cache_get(CK_BANQUETS);
-  list.push(banquet);
-  cache_set(CK_BANQUETS, list);
-
-  if (API_URL) {
-    try {
-      await api_insert('banquets', banquetToSB(banquet));
-    } catch(err) {
-      console.warn('[db_addBanquet]', err.message);
-    }
-  }
-
+  await api_insert('banquets', banquetToSB(banquet));
   return banquet;
 }
 
 async function db_updateBanquet(id, updates) {
-  const list = cache_get(CK_BANQUETS);
-  const idx  = list.findIndex(b => b.id === id);
-  if (idx === -1) throw new Error('Banquet not found: ' + id);
-  const updated = { ...list[idx], ...updates };
-  list[idx] = updated;
-  cache_set(CK_BANQUETS, list);
-
-  if (API_URL) {
-    try {
-      await api_update('banquets', id, banquetToSB(updated));
-    } catch(err) {
-      console.warn('[db_updateBanquet]', err.message);
-    }
-  }
-
+  const current = await db_getBanquet(id);
+  if (!current) throw new Error('Banquet not found: ' + id);
+  const updated = { ...current, ...updates };
+  await api_update('banquets', id, banquetToSB(updated));
   return updated;
 }
 
@@ -200,34 +150,27 @@ async function db_updateBanquet(id, updates) {
 ══════════════════════════════════════════════════════════════ */
 
 function db_getClientsSync() {
-  return cache_get(CK_CLIENTS);
+  return [];
 }
 
-async function db_getClients({ sync = false } = {}) {
-  if (sync && API_URL) {
-    try {
-      const rows = await api_get('clients', 'order=created_at.desc');
-      const data = rows.map(clientFromSB);
-      cache_set(CK_CLIENTS, data);
-      return data;
-    } catch(err) {
-      console.warn('[db_getClients sync]', err.message);
-    }
-  }
-  return cache_get(CK_CLIENTS);
+async function db_getClients() {
+  const rows = await api_get('clients', 'order=created_at.desc');
+  return rows.map(clientFromSB);
 }
 
-function db_getClient(id) {
-  return cache_get(CK_CLIENTS).find(c => c.id === id) || null;
+async function db_getClient(id) {
+  const rows = await api_get('clients', `id=eq.${encodeURIComponent(id)}`);
+  return rows.length ? clientFromSB(rows[0]) : null;
 }
 
-function db_findClientByPhone(phone) {
-  const n = phone.replace(/\D/g, '');
-  return cache_get(CK_CLIENTS).find(c => (c.phone||'').replace(/\D/g,'') === n) || null;
+async function db_findClientByPhone(phone) {
+  const n    = phone.replace(/\D/g, '');
+  const rows = await db_getClients();
+  return rows.find(c => (c.phone||'').replace(/\D/g,'') === n) || null;
 }
 
 async function db_upsertClient(name, phone) {
-  const existing = db_findClientByPhone(phone);
+  const existing = await db_findClientByPhone(phone);
   if (existing) return existing;
 
   const client = {
@@ -235,31 +178,20 @@ async function db_upsertClient(name, phone) {
     name, phone,
     createdAt: new Date().toISOString(),
   };
-
-  const list = cache_get(CK_CLIENTS);
-  list.push(client);
-  cache_set(CK_CLIENTS, list);
-
-  if (API_URL) {
-    try {
-      await api_upsert('clients', clientToSB(client));
-    } catch(err) {
-      console.warn('[db_upsertClient]', err.message);
-    }
-  }
-
+  await api_upsert('clients', clientToSB(client));
   return client;
 }
 
 /* ══════════════════════════════════════════════════════════════
-   DERIVED HELPERS
+   DERIVED HELPERS (async)
 ══════════════════════════════════════════════════════════════ */
-function db_getClientBanquets(clientId) {
-  return cache_get(CK_BANQUETS).filter(b => b.clientId === clientId);
+async function db_getClientBanquets(clientId) {
+  const rows = await api_get('banquets', `client_id=eq.${encodeURIComponent(clientId)}&order=date.desc`);
+  return rows.map(banquetFromSB);
 }
 
-function db_getClientStats(clientId) {
-  const banquets = db_getClientBanquets(clientId);
+async function db_getClientStats(clientId) {
+  const banquets = await db_getClientBanquets(clientId);
   const total    = banquets.reduce((s, b) => s + (b.totalFinal || 0), 0);
   const last     = banquets.length
     ? [...banquets].sort((a,b) => new Date(b.date) - new Date(a.date))[0]
@@ -268,13 +200,90 @@ function db_getClientStats(clientId) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   MENU API
+   Читає меню з Supabase (таблиці menu_categories + menu_dishes)
+   або з локального menu.json як fallback.
+
+   SQL для Supabase (виконай в SQL Editor):
+
+   CREATE TABLE menu_categories (
+     id         text PRIMARY KEY,
+     name       text,
+     sort_order integer DEFAULT 0
+   );
+   CREATE TABLE menu_dishes (
+     id          text PRIMARY KEY,
+     category_id text REFERENCES menu_categories(id),
+     name        text,
+     description text,
+     composition text,
+     price       integer DEFAULT 0,
+     weight      text,
+     extras      jsonb DEFAULT '[]',
+     image_url   text,
+     sort_order  integer DEFAULT 0
+   );
+   -- Disable RLS для обох таблиць
+══════════════════════════════════════════════════════════════ */
+
+let _menuCache = null;
+
+async function db_getMenu() {
+  if (_menuCache) return _menuCache;
+
+  if (API_URL) {
+    try {
+      const [categories, dishes] = await Promise.all([
+        api_get('menu_categories', 'order=sort_order.asc'),
+        api_get('menu_dishes',     'order=sort_order.asc'),
+      ]);
+      _menuCache = categories.map(cat => ({
+        id:         cat.id,
+        name:       cat.name,
+        sort_order: cat.sort_order,
+        dishes: dishes
+          .filter(d => d.category_id === cat.id)
+          .map(d => ({
+            id:          d.id,
+            name:        d.name,
+            description: d.description || '',
+            composition: d.composition || '',
+            price:       d.price       || 0,
+            weight:      d.weight      || '',
+            extras:      Array.isArray(d.extras) ? d.extras : [],
+            image_url:   d.image_url   || '',
+          })),
+      }));
+      return _menuCache;
+    } catch(err) {
+      console.warn('[db_getMenu] Supabase error, fallback to menu.json:', err.message);
+    }
+  }
+
+  // Fallback — локальний файл
+  try {
+    const r = await fetch('./menu.json');
+    _menuCache = await r.json();
+    return _menuCache;
+  } catch(err) {
+    console.warn('[db_getMenu] menu.json not found:', err.message);
+    return [];
+  }
+}
+
+function db_clearMenuCache() { _menuCache = null; }
+
+/* ══════════════════════════════════════════════════════════════
    SEED — демо-дані коли API_URL не вказано
 ══════════════════════════════════════════════════════════════ */
+// Зберігаємо seed у пам'яті (не в localStorage)
+let _seedBanquets = null;
+let _seedClients  = null;
+
 function db_seed() {
   if (API_URL) return;
-  if (cache_get(CK_BANQUETS).length > 0) return;
 
-  const clients = [
+  _seedClients = [
     { id:'c1', name:'Олена Коваль',     phone:'+380 67 123 4567', createdAt:'2025-06-01T10:00:00Z' },
     { id:'c2', name:'Михайло Бондар',   phone:'+380 50 987 6543', createdAt:'2025-06-15T12:00:00Z' },
     { id:'c3', name:'Тетяна Мороз',     phone:'+380 73 456 7890', createdAt:'2025-07-01T09:00:00Z' },
@@ -282,9 +291,7 @@ function db_seed() {
     { id:'c5', name:'Юлія Іваненко',    phone:'+380 63 654 3210', createdAt:'2025-07-20T14:00:00Z' },
     { id:'c6', name:'Павло Кравченко',  phone:'+380 98 111 2233', createdAt:'2025-08-01T10:00:00Z' },
   ];
-  cache_set(CK_CLIENTS, clients);
-
-  const banquets = [
+  _seedBanquets = [
     { id:'b1', clientId:'c1', clientName:'Олена Коваль',    clientPhone:'+380 67 123 4567', date:'2025-08-14', guests:45, deposit:8000,  totalBase:42000, totalFinal:42000, modifier:0,   modLabel:'без',  status:'confirmed', comment:'День народження, алергія на горіхи', dishes:[{id:'d1',name:'Філадельфія Класік',qty:3,price:340},{id:'d2',name:'Самурай',qty:5,price:425},{id:'d4',name:'Шашлик',qty:10,price:380},{id:'d3',name:'Хачапурі',qty:8,price:290}], createdAt:'2025-08-01T10:00:00Z' },
     { id:'b2', clientId:'c2', clientName:'Михайло Бондар',  clientPhone:'+380 50 987 6543', date:'2025-08-19', guests:60, deposit:10000, totalBase:61818, totalFinal:68000, modifier:10,  modLabel:'+10%', status:'confirmed', comment:'Корпоратив', dishes:[{id:'d5',name:'Вогняний Дракон',qty:4,price:445},{id:'d6',name:'Канада',qty:6,price:410},{id:'d3',name:'Хачапурі',qty:10,price:290},{id:'d4',name:'Шашлик',qty:8,price:380}], createdAt:'2025-08-05T11:00:00Z' },
     { id:'b3', clientId:'c3', clientName:'Тетяна Мороз',    clientPhone:'+380 73 456 7890', date:'2025-08-23', guests:30, deposit:5000,  totalBase:28500, totalFinal:28500, modifier:0,   modLabel:'без',  status:'pending',   comment:'', dishes:[{id:'d2',name:'Самурай',qty:4,price:425},{id:'d3',name:'Хачапурі',qty:6,price:290}], createdAt:'2025-08-10T09:00:00Z' },
@@ -293,16 +300,45 @@ function db_seed() {
     { id:'b6', clientId:'c6', clientName:'Павло Кравченко', clientPhone:'+380 98 111 2233', date:'2025-09-12', guests:50, deposit:9000,  totalBase:53000, totalFinal:53000, modifier:0,   modLabel:'без',  status:'confirmed', comment:'Корпоратив, без алкоголю', dishes:[{id:'d1',name:'Філадельфія Класік',qty:8,price:340},{id:'d6',name:'Канада',qty:6,price:410},{id:'d4',name:'Шашлик',qty:12,price:380}], createdAt:'2025-08-20T11:00:00Z' },
     { id:'b7', clientId:'c1', clientName:'Олена Коваль',    clientPhone:'+380 67 123 4567', date:'2025-10-20', guests:35, deposit:6000,  totalBase:31000, totalFinal:34100, modifier:10,  modLabel:'+10%', status:'pending',   comment:'Ювілей матері', dishes:[{id:'d5',name:'Вогняний Дракон',qty:5,price:445},{id:'d3',name:'Хачапурі',qty:7,price:290},{id:'d4',name:'Шашлик',qty:8,price:380}], createdAt:'2025-09-01T10:00:00Z' },
   ];
-  cache_set(CK_BANQUETS, banquets);
+
+  // Перевизначаємо API функції для офлайн-режиму
+  window._offlineMode = true;
+}
+
+// Офлайн-перевизначення викликаються після db_seed() якщо API_URL порожній
+if (!API_URL) {
+  // Замінюємо async функції на офлайн-версії після завантаження
+  window.addEventListener('DOMContentLoaded', () => {
+    if (!window._offlineMode) return;
+
+    db_getBanquets     = async () => _seedBanquets || [];
+    db_getBanquet      = async (id) => (_seedBanquets||[]).find(b=>b.id===id) || null;
+    db_getClients      = async () => _seedClients || [];
+    db_getClient       = async (id) => (_seedClients||[]).find(c=>c.id===id) || null;
+    db_findClientByPhone = async (phone) => {
+      const n = phone.replace(/\D/g,'');
+      return (_seedClients||[]).find(c=>(c.phone||'').replace(/\D/g,'')=== n)||null;
+    };
+    db_getClientBanquets = async (clientId) =>
+      (_seedBanquets||[]).filter(b=>b.clientId===clientId);
+    db_getClientStats  = async (clientId) => {
+      const bq = (_seedBanquets||[]).filter(b=>b.clientId===clientId);
+      return { count:bq.length, total:bq.reduce((s,b)=>s+(b.totalFinal||0),0),
+        last: bq.length?[...bq].sort((a,b)=>new Date(b.date)-new Date(a.date))[0]:null };
+    };
+    db_upsertClient    = async (name, phone) => ({ id:'c_new', name, phone, createdAt: new Date().toISOString() });
+    db_addBanquet      = async (b) => ({ ...b, id:'b_new_'+Date.now(), createdAt:new Date().toISOString() });
+    db_updateBanquet   = async (id, u) => ({ id, ...u });
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════
    SHARED UI HELPERS
 ══════════════════════════════════════════════════════════════ */
-function fmt(n)      { return (n || 0).toLocaleString('uk-UA') + ' ₴'; }
-function fmtDate(s)  { if (!s) return '—'; const part = (s+'').split('T')[0]; const [y,m,d] = part.split('-'); if (!d) return s; return `${d}.${m}.${y}`; }
+function fmt(n)         { return (n || 0).toLocaleString('uk-UA') + ' ₴'; }
+function fmtDate(s)     { if (!s) return '—'; const part=(s+'').split('T')[0]; const [y,m,d]=part.split('-'); if(!d) return s; return `${d}.${m}.${y}`; }
 function statusLabel(s) { return { confirmed:'Підтверджено', pending:'Очікує', cancelled:'Скасовано' }[s] || s; }
-function getParam(k) { return new URLSearchParams(window.location.search).get(k); }
+function getParam(k)    { return new URLSearchParams(window.location.search).get(k); }
 function goTo(page, params) {
   const q = params ? '?' + new URLSearchParams(params).toString() : '';
   window.location.href = page + q;
@@ -314,9 +350,6 @@ function showToast(msg, duration = 2800) {
   setTimeout(() => t.classList.remove('show'), duration);
 }
 
-/* ══════════════════════════════════════════════════════════════
-   OFFLINE BANNER
-══════════════════════════════════════════════════════════════ */
 function renderOfflineBanner() {
   if (API_URL) return;
   const bar = document.createElement('div');
@@ -327,6 +360,6 @@ function renderOfflineBanner() {
     'font-weight:600','z-index:500','display:flex',
     'align-items:center','gap:12px','font-family:Manrope,sans-serif'
   ].join(';');
-  bar.innerHTML = `<span>⚠️ Офлайн-режим — дані тільки в браузері цього пристрою</span>`;
+  bar.innerHTML = `<span>⚠️ Офлайн-режим — дані тільки демонстраційні</span>`;
   document.body.appendChild(bar);
 }

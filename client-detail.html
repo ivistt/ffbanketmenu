@@ -62,68 +62,82 @@
 <script>
 db_seed(); renderOfflineBanner();
 
-const id = getParam('id');
-const c  = id ? db_getClient(id) : null;
+async function init() {
+  const id = getParam('id');
+  if (!id) { showNotFound(); return; }
 
-if (!c) {
+  try {
+    const c = await db_getClient(id);
+    if (!c) { showNotFound(); return; }
+
+    document.title = `${c.name} · ОГОнь`;
+    document.getElementById('clientName').textContent  = c.name;
+    document.getElementById('clientPhone').textContent = c.phone;
+    document.getElementById('clientAvatar').textContent = c.name.charAt(0);
+
+    const [stats, banquets] = await Promise.all([
+      db_getClientStats(c.id),
+      db_getClientBanquets(c.id),
+    ]);
+    const sorted    = banquets.sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const avgCheck  = stats.count > 0 ? Math.round(stats.total / stats.count) : 0;
+    const totalGuests = sorted.reduce((s,b)=>s+(b.guests||0),0);
+
+    if (stats.count >= 2) {
+      document.getElementById('repeatBadge').innerHTML =
+        `<span style="background:rgba(232,87,42,.12);border:1px solid rgba(232,87,42,.3);color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:7px 18px;border-radius:20px">⭐ Постійний клієнт</span>`;
+    }
+
+    document.getElementById('clientStats').innerHTML = `
+      <div class="stat-card acc"><div class="stat-label">Банкетів</div><div class="stat-val">${stats.count}</div><div class="stat-sub">загалом проведено</div></div>
+      <div class="stat-card grn"><div class="stat-label">Загальна виручка</div><div class="stat-val">${fmt(stats.total)}</div><div class="stat-sub">з цього клієнта</div></div>
+      <div class="stat-card"><div class="stat-label">Середній чек</div><div class="stat-val">${fmt(avgCheck)}</div><div class="stat-sub">за один банкет</div></div>
+    `;
+
+    const lastDate  = stats.last ? fmtDate(stats.last.date) : '—';
+    const allTopics = sorted.map(b=>b.comment).filter(Boolean);
+    document.getElementById('clientInfo').innerHTML = `
+      <div class="info-row"><span class="info-key">Ім'я</span><span class="info-val">${c.name}</span></div>
+      <div class="info-row"><span class="info-key">Телефон</span><span class="info-val">${c.phone}</span></div>
+      <div class="info-row"><span class="info-key">Клієнт з</span><span class="info-val" style="font-weight:500;color:var(--text-dim)">${c.createdAt?new Date(c.createdAt).toLocaleDateString('uk-UA'):'—'}</span></div>
+      <div class="info-row"><span class="info-key">Останній банкет</span><span class="info-val">${lastDate}</span></div>
+      <div class="info-row"><span class="info-key">Гостей загалом</span><span class="info-val">👥 ${totalGuests}</span></div>
+      ${allTopics.length?`
+      <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <span class="info-key">Тематики / коментарі</span>
+        <div style="display:flex;flex-direction:column;gap:5px;width:100%">
+          ${allTopics.map(t=>`<div style="font-size:12px;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;line-height:1.4">${t}</div>`).join('')}
+        </div>
+      </div>`:''}
+    `;
+
+    const bl = document.getElementById('clientBanquets');
+    if (!sorted.length) {
+      bl.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div>Банкетів поки немає</div>`;
+    } else {
+      bl.innerHTML = sorted.map(b=>`
+        <div class="banquet-row" style="grid-template-columns:92px 1fr 72px 120px 120px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
+          <div class="br-date">${fmtDate(b.date)}</div>
+          <div>${b.comment?`<div class="br-note" style="font-size:12px">${b.comment.slice(0,44)}${b.comment.length>44?'…':''}</div>`:'<div class="br-note">—</div>'}</div>
+          <div class="br-guests">👥 ${b.guests}</div>
+          <div class="br-sum">${fmt(b.deposit)}</div>
+          <div class="br-sum acc">${fmt(b.totalFinal)}</div>
+          <div><span class="status-pill ${b.status}">${statusLabel(b.status)}</span></div>
+        </div>`).join('');
+    }
+
+    document.getElementById('clientContent').style.display='block';
+  } catch(err) {
+    showToast('⚠️ ' + err.message);
+  }
+}
+
+function showNotFound() {
   document.getElementById('notFound').style.display='block';
   document.getElementById('clientName').textContent='Клієнта не знайдено';
-} else {
-  document.title = `${c.name} · ОГОнь`;
-  document.getElementById('clientName').textContent  = c.name;
-  document.getElementById('clientPhone').textContent = c.phone;
-  document.getElementById('clientAvatar').textContent = c.name.charAt(0);
-
-  const stats    = db_getClientStats(c.id);
-  const banquets = db_getClientBanquets(c.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const avgCheck = stats.count > 0 ? Math.round(stats.total / stats.count) : 0;
-  const totalGuests = banquets.reduce((s,b)=>s+(b.guests||0),0);
-
-  if (stats.count >= 2) {
-    document.getElementById('repeatBadge').innerHTML =
-      `<span style="background:rgba(232,87,42,.12);border:1px solid rgba(232,87,42,.3);color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:7px 18px;border-radius:20px">⭐ Постійний клієнт</span>`;
-  }
-
-  document.getElementById('clientStats').innerHTML = `
-    <div class="stat-card acc"><div class="stat-label">Банкетів</div><div class="stat-val">${stats.count}</div><div class="stat-sub">загалом проведено</div></div>
-    <div class="stat-card grn"><div class="stat-label">Загальна виручка</div><div class="stat-val">${fmt(stats.total)}</div><div class="stat-sub">з цього клієнта</div></div>
-    <div class="stat-card"><div class="stat-label">Середній чек</div><div class="stat-val">${fmt(avgCheck)}</div><div class="stat-sub">за один банкет</div></div>
-  `;
-
-  const lastDate = stats.last ? fmtDate(stats.last.date) : '—';
-  const allTopics = banquets.map(b=>b.comment).filter(Boolean);
-  document.getElementById('clientInfo').innerHTML = `
-    <div class="info-row"><span class="info-key">Ім'я</span><span class="info-val">${c.name}</span></div>
-    <div class="info-row"><span class="info-key">Телефон</span><span class="info-val">${c.phone}</span></div>
-    <div class="info-row"><span class="info-key">Клієнт з</span><span class="info-val" style="font-weight:500;color:var(--text-dim)">${c.createdAt?new Date(c.createdAt).toLocaleDateString('uk-UA'):'—'}</span></div>
-    <div class="info-row"><span class="info-key">Останній банкет</span><span class="info-val">${lastDate}</span></div>
-    <div class="info-row"><span class="info-key">Гостей загалом</span><span class="info-val">👥 ${totalGuests}</span></div>
-    ${allTopics.length?`
-    <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:8px">
-      <span class="info-key">Тематики / коментарі</span>
-      <div style="display:flex;flex-direction:column;gap:5px;width:100%">
-        ${allTopics.map(t=>`<div style="font-size:12px;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;line-height:1.4">${t}</div>`).join('')}
-      </div>
-    </div>`:''}
-  `;
-
-  const bl = document.getElementById('clientBanquets');
-  if (!banquets.length) {
-    bl.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div>Банкетів поки немає</div>`;
-  } else {
-    bl.innerHTML = banquets.map(b=>`
-      <div class="banquet-row" style="grid-template-columns:92px 1fr 72px 120px 120px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
-        <div class="br-date">${fmtDate(b.date)}</div>
-        <div>${b.comment?`<div class="br-note" style="font-size:12px">${b.comment.slice(0,44)}${b.comment.length>44?'…':''}</div>`:'<div class="br-note">—</div>'}</div>
-        <div class="br-guests">👥 ${b.guests}</div>
-        <div class="br-sum">${fmt(b.deposit)}</div>
-        <div class="br-sum acc">${fmt(b.totalFinal)}</div>
-        <div><span class="status-pill ${b.status}">${statusLabel(b.status)}</span></div>
-      </div>`).join('');
-  }
-
-  document.getElementById('clientContent').style.display='block';
 }
+
+init();
 </script>
 </body>
 </html>

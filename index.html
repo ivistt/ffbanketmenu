@@ -66,60 +66,60 @@ renderOfflineBanner();
 document.getElementById('dashDate').textContent =
   new Date().toLocaleDateString('uk-UA',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
-function render() {
-  const banquets = db_getBanquetsSync();
-  const clients  = db_getClientsSync();
-  const now      = new Date();
-  const mBanq    = banquets.filter(b => { const d=new Date(b.date); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
-  const revenue  = banquets.reduce((s,b)=>s+(b.totalFinal||0),0);
-  document.getElementById('stMonth').textContent   = mBanq.length;
-  document.getElementById('stRev').textContent     = fmt(revenue);
-  document.getElementById('stClients').textContent = clients.length;
+async function render() {
+  try {
+    const [banquets, clients] = await Promise.all([db_getBanquets(), db_getClients()]);
+    const now   = new Date();
+    const mBanq = banquets.filter(b => { const d=new Date(b.date); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
+    const revenue = banquets.reduce((s,b)=>s+(b.totalFinal||0),0);
+    document.getElementById('stMonth').textContent   = mBanq.length;
+    document.getElementById('stRev').textContent     = fmt(revenue);
+    document.getElementById('stClients').textContent = clients.length;
 
-  const upcoming = [...banquets].filter(b=>b.status!=='cancelled').sort((a,b)=>new Date(a.date)-new Date(b.date)).slice(0,5);
-  const list = document.getElementById('dashList');
-  if (!upcoming.length) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div>Немає запланованих банкетів</div>`;
-  } else {
-    list.innerHTML = upcoming.map(b=>`
-      <div class="banquet-row" style="grid-template-columns:100px 1fr 140px 72px 120px 130px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
-        <div class="br-date">${fmtDate(b.date)}</div>
-        <div><div class="br-name">${b.clientName}</div>${b.comment?`<div class="br-note">${b.comment.slice(0,40)}${b.comment.length>40?'…':''}</div>`:''}</div>
-        <div class="br-phone">${b.clientPhone}</div>
-        <div class="br-guests">👥 ${b.guests}</div>
-        <div class="br-sum">${fmt(b.deposit)}</div>
-        <div class="br-sum acc">${fmt(b.totalFinal)}</div>
-        <div><span class="status-pill ${b.status}">${statusLabel(b.status)}</span></div>
-      </div>`).join('');
-  }
+    const upcoming = [...banquets].filter(b=>b.status!=='cancelled').sort((a,b)=>new Date(a.date)-new Date(b.date)).slice(0,5);
+    const list = document.getElementById('dashList');
+    if (!upcoming.length) {
+      list.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div>Немає запланованих банкетів</div>`;
+    } else {
+      list.innerHTML = upcoming.map(b=>`
+        <div class="banquet-row" style="grid-template-columns:100px 1fr 140px 72px 120px 130px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
+          <div class="br-date">${fmtDate(b.date)}</div>
+          <div><div class="br-name">${b.clientName}</div>${b.comment?`<div class="br-note">${b.comment.slice(0,40)}${b.comment.length>40?'…':''}</div>`:''}</div>
+          <div class="br-phone">${b.clientPhone}</div>
+          <div class="br-guests">👥 ${b.guests}</div>
+          <div class="br-sum">${fmt(b.deposit)}</div>
+          <div class="br-sum acc">${fmt(b.totalFinal)}</div>
+          <div><span class="status-pill ${b.status}">${statusLabel(b.status)}</span></div>
+        </div>`).join('');
+    }
 
-  const repeat = clients.map(c=>({...c,...db_getClientStats(c.id)})).filter(c=>c.count>=2).sort((a,b)=>b.count-a.count).slice(0,6);
-  const rc = document.getElementById('repeatClients');
-  if (!repeat.length) {
-    rc.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">👥</div>Ще немає постійних клієнтів</div>`;
-  } else {
-    rc.innerHTML = repeat.map(c=>`
-      <div class="client-card" onclick="goTo('client-detail.html',{id:'${c.id}'})">
-        <div class="client-card-header">
-          <div class="client-avatar">${c.name.charAt(0)}</div>
-          <div><div class="client-name">${c.name}</div><div class="client-phone">${c.phone}</div></div>
-        </div>
-        <div class="client-stats">
-          <div class="client-stat acc"><div class="client-stat-val">${c.count}</div><div class="client-stat-lbl">Банкетів</div></div>
-          <div class="client-stat grn"><div class="client-stat-val" style="font-size:12px">${fmt(c.total)}</div><div class="client-stat-lbl">Виручка</div></div>
-        </div>
-      </div>`).join('');
+    const statsArr = await Promise.all(clients.map(async c => ({...c, ...await db_getClientStats(c.id)})));
+    const repeat   = statsArr.filter(c=>c.count>=2).sort((a,b)=>b.count-a.count).slice(0,6);
+    const rc = document.getElementById('repeatClients');
+    if (!repeat.length) {
+      rc.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">👥</div>Ще немає постійних клієнтів</div>`;
+    } else {
+      rc.innerHTML = repeat.map(c=>`
+        <div class="client-card" onclick="goTo('client-detail.html',{id:'${c.id}'})">
+          <div class="client-card-header">
+            <div class="client-avatar">${c.name.charAt(0)}</div>
+            <div><div class="client-name">${c.name}</div><div class="client-phone">${c.phone}</div></div>
+          </div>
+          <div class="client-stats">
+            <div class="client-stat acc"><div class="client-stat-val">${c.count}</div><div class="client-stat-lbl">Банкетів</div></div>
+            <div class="client-stat grn"><div class="client-stat-val" style="font-size:12px">${fmt(c.total)}</div><div class="client-stat-lbl">Виручка</div></div>
+          </div>
+        </div>`).join('');
+    }
+  } catch(err) {
+    showToast('⚠️ Помилка завантаження: ' + err.message);
   }
 }
 
 async function syncAll() {
-  showToast('🔄 Синхронізація...');
-  try {
-    await db_getBanquets({sync:true});
-    await db_getClients({sync:true});
-    render();
-    showToast('✅ Дані оновлено');
-  } catch { showToast('⚠️ Помилка синхронізації'); }
+  showToast('🔄 Оновлення...');
+  try { await render(); showToast('✅ Дані оновлено'); }
+  catch { showToast('⚠️ Помилка'); }
 }
 
 render();

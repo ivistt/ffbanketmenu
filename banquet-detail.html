@@ -206,6 +206,17 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
               <input class="inline-input" type="date" id="e-date">
             </div>
             <div class="info-row">
+              <span class="info-key">Час</span>
+              <input class="inline-input" type="time" id="e-time" style="max-width:120px">
+            </div>
+            <div class="info-row" style="align-items:flex-start;gap:8px">
+              <span class="info-key" style="padding-top:6px">Зал</span>
+              <div style="display:flex;gap:6px;flex:1;justify-content:flex-end">
+                <button type="button" class="hall-btn-sm active" id="e-hall-big" onclick="pickEditHall('big')" style="font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .18s;font-weight:700">🏛️ Великий</button>
+                <button type="button" class="hall-btn-sm" id="e-hall-small" onclick="pickEditHall('small')" style="font-size:11px;padding:5px 10px;border-radius:8px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .18s;font-weight:700">🚪 Малий</button>
+              </div>
+            </div>
+            <div class="info-row">
               <span class="info-key">Гостей</span>
               <input class="inline-input" type="number" id="e-guests" min="1" style="max-width:100px" oninput="recalc()">
             </div>
@@ -230,7 +241,7 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
           <!-- Edit: live totals + modifier -->
           <div class="edit-only" style="display:none">
             <div style="margin-bottom:14px">
-              <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">Модифікатор</div>
+              <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">Обслуговування банкету</div>
               <div class="mod-chips-wrap">
                 <div class="mod-chips-row">
                   <span class="mod-chips-lbl" style="color:var(--accent)">Наценка</span>
@@ -252,7 +263,7 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
             </div>
             <div class="tc-div" style="margin-bottom:12px"></div>
             <div class="totals-card" id="liveTotals">
-              <div class="tc-row"><span>Без наценки:</span><span class="tc-val" id="lt-base">—</span></div>
+              <div class="tc-row"><span>Без надбавки:</span><span class="tc-val" id="lt-base">—</span></div>
               <div class="tc-row" id="lt-mod-row" style="display:none"><span id="lt-mod-lbl"></span><span class="tc-val" id="lt-mod-val"></span></div>
               <div class="tc-div"></div>
               <div class="tc-row big"><span>Підсумок:</span><span id="lt-final">—</span></div>
@@ -312,25 +323,36 @@ db_seed(); renderOfflineBanner();
 
 /* ── STATE ── */
 const BID    = getParam('id');
-let b        = BID ? db_getBanquet(BID) : null;
+let b        = null;
 let editMode = false;
 let menuData = [];
-// mutable state while editing
-let eQty     = {};   // dishId → qty
-let eMod     = 0;    // modifier %
+let eQty     = {};
+let eMod     = 0;
 let eStatus  = '';
 
 /* ── INIT ── */
-if (!b) {
+async function init() {
+  if (!BID) { showNotFound(); return; }
+  try {
+    b = await db_getBanquet(BID);
+    if (!b) { showNotFound(); return; }
+    await loadMenuThenRender();
+  } catch(err) {
+    showToast('⚠️ ' + err.message);
+    showNotFound();
+  }
+}
+
+function showNotFound() {
   document.getElementById('notFound').style.display = 'block';
   document.getElementById('pageTitle').textContent  = 'Банкет не знайдено';
-} else {
-  loadMenuThenRender();
 }
 
 async function loadMenuThenRender() {
-  try { const r = await fetch('./menu.json'); menuData = await r.json(); }
-  catch {
+  try {
+    menuData = await db_getMenu();
+    if (!menuData || !menuData.length) throw new Error('empty');
+  } catch {
     menuData = [{ id:'demo', name:'Демо', sort_order:1, dishes:[
       {id:'d1',name:'Філадельфія Класік',price:340,weight:'290г',extras:[],image_url:''},
       {id:'d2',name:'Самурай',price:425,weight:'330г',extras:[],image_url:''},
@@ -340,7 +362,7 @@ async function loadMenuThenRender() {
       {id:'d6',name:'Канада',price:410,weight:'270г',extras:[],image_url:''},
     ]}];
   }
-  renderView();
+  await renderView();
   setMode('view');
   document.getElementById('detailGrid').style.display = 'block';
   document.getElementById('btnStartEdit').style.display = 'inline-flex';
@@ -349,8 +371,8 @@ async function loadMenuThenRender() {
 /* ══════════════════════════════════════════
    VIEW MODE
 ══════════════════════════════════════════ */
-function renderView() {
-  b = db_getBanquet(BID);
+async function renderView() {
+  b = await db_getBanquet(BID);
   document.title = `Банкет · ${b.clientName} · ${fmtDate(b.date)}`;
   document.getElementById('pageTitle').textContent = `Банкет · ${b.clientName}`;
   document.getElementById('pageSub').textContent   = `${fmtDate(b.date)} · 👥 ${b.guests} гостей`;
@@ -361,9 +383,11 @@ function renderView() {
   spv.textContent = statusLabel(b.status);
   document.getElementById('statusViewWrap').style.display = 'block';
 
-  // Client
-  const client = b.clientId ? db_getClient(b.clientId) : null;
-  const stats  = client ? db_getClientStats(client.id) : null;
+  // Client + stats
+  const [client, stats] = b.clientId
+    ? await Promise.all([db_getClient(b.clientId), db_getClientStats(b.clientId)])
+    : [null, null];
+
   document.getElementById('clientInfoView').innerHTML = `
     <div class="info-row"><span class="info-key">Ім'я</span><span class="info-val">${b.clientName}</span></div>
     <div class="info-row"><span class="info-key">Телефон</span><span class="info-val">${b.clientPhone}</span></div>
@@ -374,7 +398,8 @@ function renderView() {
 
   // Banquet details
   document.getElementById('banquetInfoView').innerHTML = `
-    <div class="info-row"><span class="info-key">Дата</span><span class="info-val">${fmtDate(b.date)}</span></div>
+    <div class="info-row"><span class="info-key">Дата</span><span class="info-val">${fmtDate(b.date)}${b.time ? ` о ${b.time}` : ''}</span></div>
+    <div class="info-row"><span class="info-key">Зал</span><span class="info-val">${b.hallLabel || 'Великий зал'}</span></div>
     <div class="info-row"><span class="info-key">Гостей</span><span class="info-val">👥 ${b.guests}</span></div>
     <div class="info-row"><span class="info-key">Залог</span><span class="info-val">${fmt(b.deposit)}</span></div>
     ${b.comment ? `<div class="info-row"><span class="info-key">Коментар</span><span class="info-val" style="font-weight:500;font-size:12px;max-width:200px;text-align:right;line-height:1.45">${b.comment}</span></div>` : ''}
@@ -384,8 +409,8 @@ function renderView() {
   // Financials
   const modAmt = (b.totalFinal||0) - (b.totalBase||0);
   document.getElementById('financialInfoView').innerHTML = `
-    <div class="info-row"><span class="info-key">Без наценки</span><span class="info-val">${fmt(b.totalBase)}</span></div>
-    ${b.modifier ? `<div class="info-row"><span class="info-key">Модифікатор</span><span class="info-val" style="color:${b.modifier>0?'var(--accent)':'var(--green)'}">${b.modLabel} (${b.modifier>0?'+':''}${fmt(modAmt)})</span></div>` : ''}
+    <div class="info-row"><span class="info-key">Без надбавки</span><span class="info-val">${fmt(b.totalBase)}</span></div>
+    ${b.modifier ? `<div class="info-row"><span class="info-key">Обслуговування</span><span class="info-val" style="color:${b.modifier>0?'var(--accent)':'var(--green)'}">${b.modLabel} (${b.modifier>0?'+':''}${fmt(modAmt)})</span></div>` : ''}
     <div class="info-row"><span class="info-key">Підсумок</span><span class="info-val acc" style="font-size:16px;font-family:var(--fh)">${fmt(b.totalFinal)}</span></div>
     <div class="info-row"><span class="info-key">На людину</span><span class="info-val grn">${b.guests ? fmt(Math.round((b.totalBase||0) / b.guests)) : '—'}</span></div>
   `;
@@ -443,9 +468,11 @@ function startEdit() {
   document.getElementById('e-comment').value = b.comment       || '';
 
   // Client link
-  const client = b.clientId ? db_getClient(b.clientId) : null;
-  document.getElementById('clientLinkWrap').innerHTML = client
-    ? `<a href="client-detail.html?id=${client.id}" class="btn-back" style="font-size:12px;padding:7px 13px">👤 Профіль клієнта →</a>` : '';
+  // Client link (async)
+  db_getClient(b.clientId).then(client => {
+    document.getElementById('clientLinkWrap').innerHTML = client
+      ? `<a href="client-detail.html?id=${client.id}" class="btn-back" style="font-size:12px;padding:7px 13px">👤 Профіль клієнта →</a>` : '';
+  });
 
   // Status radios
   document.querySelectorAll('.status-radio-btn').forEach(btn => {
@@ -469,7 +496,6 @@ function startEdit() {
 }
 
 function cancelEdit() {
-  // Reset any chip state
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
   editMode = false;
   document.getElementById('unsavedBadge').classList.remove('show');
@@ -613,14 +639,14 @@ async function saveAll() {
       status: eStatus, modifier: eMod, modLabel,
       totalBase: base, totalFinal: final, dishes,
     });
-    b = db_getBanquet(BID);
+    b = await db_getBanquet(BID);
 
     // Reset chip state
     document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
     editMode = false;
     document.getElementById('unsavedBadge').classList.remove('show');
     setMode('view');
-    renderView();
+    await renderView();
     showToast('✅ Зміни збережено');
   } catch(err) {
     showToast('⚠️ Помилка: ' + err.message);
@@ -638,6 +664,8 @@ function findDishIdByName(name) {
   for (const cat of menuData) for (const d of cat.dishes) if (d.name === name) return d.id;
   return null;
 }
+
+init();
 
 window.addEventListener('beforeunload', e => {
   if (editMode && document.getElementById('unsavedBadge').classList.contains('show')) {

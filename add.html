@@ -41,6 +41,15 @@ body { overflow: hidden; }
 .btn-submit:hover { background: var(--accent2); transform: translateY(-1px); }
 .btn-submit:disabled { opacity: .6; transform: none; cursor: not-allowed; }
 
+/* Hall picker */
+.hall-btn {
+  flex: 1; background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: var(--radius); padding: 8px 10px; font-size: 12px; font-weight: 700;
+  color: var(--text-dim); cursor: pointer; transition: all .18s; text-align: center;
+}
+.hall-btn:hover { border-color: var(--border2); color: var(--text); }
+.hall-btn.active { background: rgba(232,87,42,.1); border-color: var(--accent); color: var(--accent); }
+
 /* MIDDLE */
 .add-mid { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
 .cat-nav { background: rgba(14,14,15,.9); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 10px 14px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
@@ -136,6 +145,17 @@ body { overflow: hidden; }
         <div class="ferr" id="fd">Оберіть дату</div>
       </div>
       <div class="form-group">
+        <label for="f-time">Час початку</label>
+        <input class="form-input" type="time" id="f-time">
+      </div>
+      <div class="form-group">
+        <label>Зал</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button type="button" class="hall-btn active" id="hall-big" onclick="pickHall('big')">🏛️ Великий зал</button>
+          <button type="button" class="hall-btn" id="hall-small" onclick="pickHall('small')">🚪 Малий зал</button>
+        </div>
+      </div>
+      <div class="form-group">
         <label for="f-guests">Гостей</label>
         <input class="form-input" type="number" id="f-guests" placeholder="30" min="1" oninput="clearErr('f-guests','fg');calcTotals();calcSummary()">
         <div class="ferr" id="fg">Введіть кількість гостей</div>
@@ -152,10 +172,10 @@ body { overflow: hidden; }
     </div>
 
     <div>
-      <div class="panel-title">Модифікатор ціни</div>
+      <div class="panel-title">Обслуговування банкету</div>
       <div style="display:flex;flex-direction:column;gap:9px">
         <div class="mod-row">
-          <div class="mod-lbl" style="color:var(--accent)">Наценка</div>
+          <div class="mod-lbl" style="color:var(--accent)">Надбавка</div>
           <div class="chips">
             <div class="chip" data-t="s" data-v="10" onclick="pickChip(this)">+10%</div>
             <div class="chip" data-t="s" data-v="20" onclick="pickChip(this)">+20%</div>
@@ -175,7 +195,7 @@ body { overflow: hidden; }
 
     <div class="totals">
       <div class="tot-row"><span>Страв:</span><span class="tot-val" id="t-count">0</span></div>
-      <div class="tot-row"><span>Без наценки:</span><span class="tot-val" id="t-base">0 ₴</span></div>
+      <div class="tot-row"><span>Без надбавки:</span><span class="tot-val" id="t-base">0 ₴</span></div>
       <div class="tot-row" id="t-mod-row" style="display:none"><span id="t-mod-lbl"></span><span class="tot-val" id="t-mod-val"></span></div>
       <div class="tot-div"></div>
       <div class="tot-row big"><span>Підсумок:</span><span id="t-final">0 ₴</span></div>
@@ -204,7 +224,7 @@ body { overflow: hidden; }
     </div>
     <div class="sum-list" id="sumList" style="display:none"></div>
     <div class="sum-footer" id="sumFooter" style="display:none">
-      <div class="sf-row"><span>Без наценки:</span><span id="sf-base">0 ₴</span></div>
+      <div class="sf-row"><span>Без надбавки:</span><span id="sf-base">0 ₴</span></div>
       <div class="sf-row" id="sf-mod-row" style="display:none"><span id="sf-mod-lbl"></span><span id="sf-mod-val"></span></div>
       <div class="sf-div"></div>
       <div class="sf-row big"><span>Разом:</span><span id="sf-total">0 ₴</span></div>
@@ -232,13 +252,15 @@ body { overflow: hidden; }
 <script>
 db_seed(); renderOfflineBanner();
 
-let menuData = [], quantities = {}, modifier = 0;
+let menuData = [], quantities = {}, modifier = 0, selectedHall = 'big';
 
 /* ── MENU ── */
 async function loadMenu() {
-  try { const r=await fetch('./menu.json'); menuData=await r.json(); }
-  catch {
-    menuData=[{id:'demo',name:'Демо страви',sort_order:1,dishes:[
+  try {
+    menuData = await db_getMenu();
+    if (!menuData || !menuData.length) throw new Error('empty');
+  } catch {
+    menuData = [{id:'demo', name:'Демо страви', sort_order:1, dishes:[
       {id:'d1',name:'Філадельфія Класік',description:'Лосось, вершковий сир, огірок',price:340,weight:'290г',extras:['рекомендуємо'],image_url:''},
       {id:'d2',name:'Самурай',description:'Лосось татакі, тигрова креветка',price:425,weight:'330г',extras:['рекомендуємо'],image_url:''},
       {id:'d3',name:'Хачапурі',description:'Класичне хачапурі з сиром',price:290,weight:'400г',extras:[],image_url:''},
@@ -286,6 +308,13 @@ function jumpCat(id,tab) {
   if(el&&sc) sc.scrollTo({top:el.offsetTop-14,behavior:'smooth'});
 }
 
+/* ── HALL ── */
+function pickHall(hall) {
+  selectedHall = hall;
+  document.getElementById('hall-big').classList.toggle('active', hall==='big');
+  document.getElementById('hall-small').classList.toggle('active', hall==='small');
+}
+
 /* ── QTY & TOTALS ── */
 function chgQty(id,delta) {
   quantities[id]=Math.max(0,(quantities[id]||0)+delta);
@@ -307,7 +336,7 @@ function calcTotals() {
   document.getElementById('t-base').textContent=fmt(base);
   document.getElementById('t-final').textContent=fmt(final);
   const mr=document.getElementById('t-mod-row');
-  if(modifier!==0){mr.style.display='flex';document.getElementById('t-mod-lbl').textContent=modifier>0?`Наценка +${modifier}%:`:`Знижка ${modifier}%:`;const mv=document.getElementById('t-mod-val');mv.textContent=(modifier>0?'+':'')+fmt(modAmt);mv.style.color=modifier>0?'var(--accent)':'var(--green)';}
+  if(modifier!==0){mr.style.display='flex';document.getElementById('t-mod-lbl').textContent=modifier>0?`Обслуговування +${modifier}%:`:`Знижка ${modifier}%:`;const mv=document.getElementById('t-mod-val');mv.textContent=(modifier>0?'+':'')+fmt(modAmt);mv.style.color=modifier>0?'var(--accent)':'var(--green)';}
   else mr.style.display='none';
   const pp=document.getElementById('t-pp-row');
   if(guests>0&&base>0){pp.style.display='flex';document.getElementById('t-pp').textContent=fmt(Math.round(base/guests));}
@@ -323,7 +352,7 @@ function calcSummary() {
   li.innerHTML=sel.map(d=>`<div class="sum-item"><div class="sum-item-name">${d.name}</div><div class="sum-item-qty">×${d.qty}</div><div class="sum-item-price">${fmt(d.subtotal)}</div></div>`).join('');
   document.getElementById('sf-base').textContent=fmt(base);document.getElementById('sf-total').textContent=fmt(final);
   const sm=document.getElementById('sf-mod-row');
-  if(modifier!==0){sm.style.display='flex';document.getElementById('sf-mod-lbl').textContent=modifier>0?`Наценка +${modifier}%:`:`Знижка ${modifier}%:`;document.getElementById('sf-mod-val').textContent=(modifier>0?'+':'')+fmt(modAmt);}
+  if(modifier!==0){sm.style.display='flex';document.getElementById('sf-mod-lbl').textContent=modifier>0?`Обслуговування +${modifier}%:`:`Знижка ${modifier}%:`;document.getElementById('sf-mod-val').textContent=(modifier>0?'+':'')+fmt(modAmt);}
   else sm.style.display='none';
   const sp=document.getElementById('sf-pp-row');
   if(guests>0&&base>0){sp.style.display='flex';document.getElementById('sf-pp').textContent=fmt(Math.round(base/guests))+' ₴';}
@@ -339,11 +368,11 @@ function pickChip(chip) {
 }
 
 /* ── CLIENT HINT ── */
-function onPhone() {
+async function onPhone() {
   clearErr('f-phone','fp');
   const phone=document.getElementById('f-phone').value, hint=document.getElementById('clientHint');
   if(phone.replace(/\D/g,'').length>=9){
-    const ex=db_findClientByPhone(phone);
+    const ex=await db_findClientByPhone(phone);
     if(ex){document.getElementById('clientHintText').textContent=`Клієнт знайдений: ${ex.name}`;hint.classList.add('show');if(!document.getElementById('f-name').value.trim())document.getElementById('f-name').value=ex.name;}
     else hint.classList.remove('show');
   } else hint.classList.remove('show');
@@ -367,6 +396,9 @@ async function handleSubmit() {
   const name=document.getElementById('f-name').value.trim();
   const phone=document.getElementById('f-phone').value.trim();
   const date=document.getElementById('f-date').value;
+  const time=document.getElementById('f-time').value || '';
+  const hall=selectedHall;
+  const hallLabel=hall==='big'?'Великий зал':'Малий зал';
   const guests=parseInt(document.getElementById('f-guests').value);
   const deposit=parseInt(document.getElementById('f-deposit').value);
   const comment=document.getElementById('f-comment').value.trim();
@@ -375,10 +407,11 @@ async function handleSubmit() {
 
   try {
     const client  = await db_upsertClient(name, phone);
-    const prevCount = db_getClientBanquets(client.id).length;
+    const prevCount = (await db_getClientBanquets(client.id)).length;
     const banquet  = await db_addBanquet({
       clientId:client.id, clientName:name, clientPhone:phone,
-      date, guests, deposit, comment,
+      date, time, hall, hallLabel,
+      guests, deposit, comment,
       modifier, modLabel, totalBase:base, totalFinal:final,
       status:'pending',
       dishes:sel.map(d=>({name:d.name,qty:d.qty,price:d.price})),
@@ -390,11 +423,12 @@ async function handleSubmit() {
 
     document.getElementById('modalSummary').innerHTML = `
       <b>Клієнт:</b> ${name}<br><b>Телефон:</b> ${phone}<br>
-      <b>Дата:</b> ${fmtDate(date)}<br><b>Гостей:</b> ${guests}<br>
-      <b>Залог:</b> ${fmt(deposit)}<br><b>Модифікатор:</b> ${modLabel}<br>
+      <b>Дата:</b> ${fmtDate(date)}${time?` о ${time}`:''}<br>
+      <b>Зал:</b> ${hallLabel}<br><b>Гостей:</b> ${guests}<br>
+      <b>Залог:</b> ${fmt(deposit)}<br><b>Обслуговування:</b> ${modLabel}<br>
       ${comment?`<b>Коментар:</b> ${comment}<br>`:''}
       <br><b>Страви:</b><br>${sel.map(d=>`<b>${d.name}</b> ×${d.qty} — ${fmt(d.subtotal)}`).join('<br>')}<br><br>
-      <b>Сума без наценки:</b> ${fmt(base)}<br><b>Підсумок:</b> ${fmt(final)}<br>
+      <b>Сума без надбавки:</b> ${fmt(base)}<br><b>Підсумок:</b> ${fmt(final)}<br>
       <b>На людину:</b> ${fmt(Math.round(base/guests))}`;
 
     document.getElementById('modalOverlay').classList.add('vis');
@@ -407,9 +441,10 @@ async function handleSubmit() {
 
 function goNew() {
   document.getElementById('modalOverlay').classList.remove('vis');
-  ['f-name','f-phone','f-date','f-guests','f-deposit','f-comment'].forEach(id=>{document.getElementById(id).value='';document.getElementById(id).classList.remove('err');});
+  ['f-name','f-phone','f-date','f-time','f-guests','f-deposit','f-comment'].forEach(id=>{document.getElementById(id).value='';document.getElementById(id).classList.remove('err');});
   document.querySelectorAll('.ferr').forEach(e=>e.classList.remove('show'));
   document.getElementById('clientHint').classList.remove('show');
+  selectedHall='big'; pickHall('big');
   quantities={};modifier=0;
   document.querySelectorAll('.chip').forEach(c=>c.classList.remove('s-on','d-on'));
   document.querySelectorAll('.qty-v').forEach(el=>el.textContent='0');

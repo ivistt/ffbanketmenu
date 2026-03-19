@@ -41,14 +41,12 @@ function cache_set(key, data) {
 async function sheets_write(action, body) {
   if (!SHEETS_URL) return null;
   try {
-    // no-cors: браузер не блокує відправку, але не читає відповідь
-    // Достатньо для запису в таблицю
-    await fetch(SHEETS_URL, {
-      method: 'POST',
-      mode:   'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body:   JSON.stringify({ action, ...body }),
-    });
+    // GET + no-cors — єдиний надійний спосіб з GitHub Pages.
+    // POST блокується CORS preflight. Apps Script читає через e.parameter.
+    const url = new URL(SHEETS_URL);
+    url.searchParams.set('action', action);
+    url.searchParams.set('payload', JSON.stringify(body));
+    await fetch(url.toString(), { method: 'GET', mode: 'no-cors' });
     return true;
   } catch (err) {
     console.warn('[Sheets write]', err.message);
@@ -220,7 +218,7 @@ function db_seed() {
    SHARED UI HELPERS
 ══════════════════════════════════════════════════════════════ */
 function fmt(n)      { return (n || 0).toLocaleString('uk-UA') + ' ₴'; }
-function fmtDate(s)  { if (!s) return '—'; const [y,m,d] = s.split('-'); return `${d}.${m}.${y}`; }
+function fmtDate(s)  { if (!s) return '—'; const part = (s+'').split('T')[0]; const [y,m,d] = part.split('-'); if (!d) return s; return `${d}.${m}.${y}`; }
 function statusLabel(s) { return { confirmed:'Підтверджено', pending:'Очікує', cancelled:'Скасовано' }[s] || s; }
 function getParam(k) { return new URLSearchParams(window.location.search).get(k); }
 function goTo(page, params) {

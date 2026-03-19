@@ -165,7 +165,7 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
     ⚠️ Є незбережені зміни — натисніть «Зберегти» щоб підтвердити
   </div>
 
-  <div id="detailGrid" style="display:none">
+  <div id="detailGrid" class="mode-view" style="display:none">
     <div class="detail-grid" style="grid-template-columns:340px 1fr;align-items:start;gap:20px">
 
       <!-- ═══ LEFT COLUMN ═══ -->
@@ -341,6 +341,7 @@ async function loadMenuThenRender() {
     ]}];
   }
   renderView();
+  setMode('view');
   document.getElementById('detailGrid').style.display = 'block';
   document.getElementById('btnStartEdit').style.display = 'inline-flex';
 }

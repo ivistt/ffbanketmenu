@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Банкети · ОГОнь</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="top-bar">
+  <div class="top-bar-logo" onclick="location.href='index.html'">🔥 ОГОнь</div>
+  <nav class="top-bar-nav">
+    <a class="nav-link" href="index.html">Головна</a>
+    <a class="nav-link active" href="banquets.html">Банкети</a>
+    <a class="nav-link" href="clients.html">Клієнти</a>
+  </nav>
+  <div class="tbs"></div>
+  <a class="btn-primary" href="add.html">+ Новий банкет</a>
+</div>
+
+<div class="page-wrap-wide fade-in">
+  <div class="page-header">
+    <div><div class="page-title">Всі банкети</div><div class="page-sub" id="pageSub"></div></div>
+    <div class="controls-row">
+      <input class="search-input" id="searchInput" type="text" placeholder="🔍 Ім'я або телефон..." oninput="applyFilter()" style="width:240px">
+      <button class="btn-ghost" onclick="syncAndRender()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Оновити
+      </button>
+    </div>
+  </div>
+
+  <div class="filter-tabs">
+    <button class="filter-tab active" data-f="all" onclick="setFilter(this)">Всі</button>
+    <button class="filter-tab" data-f="confirmed" onclick="setFilter(this)">✅ Підтверджені</button>
+    <button class="filter-tab" data-f="pending" onclick="setFilter(this)">⏳ Очікують</button>
+    <button class="filter-tab" data-f="cancelled" onclick="setFilter(this)">❌ Скасовані</button>
+  </div>
+
+  <div class="tbl-wrap">
+    <div class="tbl-head" style="grid-template-columns:108px 1fr 140px 72px 120px 130px 100px">
+      <div class="th">Дата</div><div class="th">Клієнт</div><div class="th">Телефон</div>
+      <div class="th">Гостей</div><div class="th">Залог</div><div class="th">Підсумок</div><div class="th">Статус</div>
+    </div>
+    <div class="tbl-body" id="tblBody">
+      <div class="loader-wrap"><div class="loader-dots"><span></span><span></span><span></span></div></div>
+    </div>
+  </div>
+  <div class="pagination" id="pagination" style="display:none"></div>
+  <div class="page-info" id="pageInfo"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="db.js"></script>
+<script>
+db_seed(); renderOfflineBanner();
+
+const PAGE_SIZE = 15;
+let cf = 'all', cp = 1, all = [], filtered = [];
+
+function init() {
+  all = db_getBanquetsSync().sort((a,b)=>new Date(b.date)-new Date(a.date));
+  applyFilter();
+}
+
+function setFilter(btn) {
+  document.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active'); cf = btn.dataset.f; cp = 1; applyFilter();
+}
+
+function applyFilter() {
+  const q = (document.getElementById('searchInput').value||'').toLowerCase();
+  filtered = all
+    .filter(b => cf==='all' || b.status===cf)
+    .filter(b => !q || b.clientName.toLowerCase().includes(q) || b.clientPhone.includes(q));
+  render();
+}
+
+function render() {
+  const body=document.getElementById('tblBody'), total=filtered.length;
+  const pages=Math.ceil(total/PAGE_SIZE), start=(cp-1)*PAGE_SIZE, slice=filtered.slice(start,start+PAGE_SIZE);
+  document.getElementById('pageSub').textContent = `${total} банкетів`;
+  if (!slice.length) {
+    body.innerHTML = '<div class="loader-wrap" style="color:var(--text-muted)">Банкетів не знайдено 🔍</div>';
+    document.getElementById('pagination').style.display='none';
+    document.getElementById('pageInfo').textContent=''; return;
+  }
+  body.innerHTML = slice.map(b=>`
+    <div class="tbl-row" style="grid-template-columns:108px 1fr 140px 72px 120px 130px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
+      <div class="td muted">${fmtDate(b.date)}</div>
+      <div class="td bold">${b.clientName}</div>
+      <div class="td muted">${b.clientPhone}</div>
+      <div class="td">👥 ${b.guests}</div>
+      <div class="td">${fmt(b.deposit)}</div>
+      <div class="td acc mono">${fmt(b.totalFinal)}</div>
+      <div class="td"><span class="status-pill ${b.status}">${statusLabel(b.status)}</span></div>
+    </div>`).join('');
+
+  const pg=document.getElementById('pagination'), pi=document.getElementById('pageInfo');
+  if (pages>1) {
+    pg.style.display='flex'; pg.innerHTML='';
+    if(cp>1) pg.innerHTML+=`<button class="page-btn" onclick="chgPage(${cp-1})">‹</button>`;
+    for(let i=1;i<=pages;i++){
+      if(i===1||i===pages||Math.abs(i-cp)<=1) pg.innerHTML+=`<button class="page-btn ${i===cp?'cur':''}" onclick="chgPage(${i})">${i}</button>`;
+      else if(Math.abs(i-cp)===2) pg.innerHTML+=`<span style="color:var(--text-muted);padding:0 4px">…</span>`;
+    }
+    if(cp<pages) pg.innerHTML+=`<button class="page-btn" onclick="chgPage(${cp+1})">›</button>`;
+    pi.textContent=`Показано ${start+1}–${Math.min(start+PAGE_SIZE,total)} з ${total}`;
+  } else { pg.style.display='none'; pi.textContent=`${total} записів`; }
+}
+
+function chgPage(p){cp=p;render();window.scrollTo(0,0);}
+
+async function syncAndRender() {
+  showToast('🔄 Завантаження...');
+  try { await db_getBanquets({sync:true}); all=db_getBanquetsSync().sort((a,b)=>new Date(b.date)-new Date(a.date)); applyFilter(); showToast('✅ Оновлено'); }
+  catch { showToast('⚠️ Помилка синхронізації'); }
+}
+
+init();
+</script>
+</body>
+</html>

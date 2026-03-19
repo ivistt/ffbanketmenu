@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Дашборд · ОГОнь Банкети</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="top-bar">
+  <div class="top-bar-logo" onclick="location.href='index.html'">🔥 ОГОнь</div>
+  <nav class="top-bar-nav">
+    <a class="nav-link active" href="index.html">Головна</a>
+    <a class="nav-link" href="banquets.html">Банкети</a>
+    <a class="nav-link" href="clients.html">Клієнти</a>
+  </nav>
+  <div class="tbs"></div>
+  <a class="btn-primary" href="add.html">+ Новий банкет</a>
+</div>
+
+<div class="page-wrap fade-in">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Дашборд</div>
+      <div class="page-sub" id="dashDate"></div>
+    </div>
+    <button class="btn-ghost" onclick="syncAll()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Синхронізувати
+    </button>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card acc"><div class="stat-label">Цього місяця</div><div class="stat-val" id="stMonth">—</div><div class="stat-sub">банкетів заплановано</div></div>
+    <div class="stat-card grn"><div class="stat-label">Загальна виручка</div><div class="stat-val" id="stRev">—</div><div class="stat-sub">по всіх банкетах</div></div>
+    <div class="stat-card"><div class="stat-label">Клієнтська база</div><div class="stat-val" id="stClients">—</div><div class="stat-sub">унікальних клієнтів</div></div>
+  </div>
+
+  <div class="section-head">
+    <div class="section-title">Найближчі банкети</div>
+    <a class="btn-ghost" href="banquets.html">Переглянути всі →</a>
+  </div>
+  <div class="banquet-list" id="dashList">
+    <div class="loader-wrap"><div class="loader-dots"><span></span><span></span><span></span></div></div>
+  </div>
+
+  <div class="section-head" style="margin-top:32px">
+    <div class="section-title">Постійні клієнти</div>
+    <a class="btn-ghost" href="clients.html">Всі клієнти →</a>
+  </div>
+  <div class="clients-grid" id="repeatClients">
+    <div class="loader-wrap"><div class="loader-dots"><span></span><span></span><span></span></div></div>
+  </div>
+
+  <div class="cta-block">
+    <div><h3>Оформити новий банкет</h3><p>Заповніть форму разом з клієнтом прямо зараз</p></div>
+    <a class="btn-primary" href="add.html">+ Додати банкет</a>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="db.js"></script>
+<script>
+db_seed();
+renderOfflineBanner();
+
+document.getElementById('dashDate').textContent =
+  new Date().toLocaleDateString('uk-UA',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+function render() {
+  const banquets = db_getBanquetsSync();
+  const clients  = db_getClientsSync();
+  const now      = new Date();
+  const mBanq    = banquets.filter(b => { const d=new Date(b.date); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
+  const revenue  = banquets.reduce((s,b)=>s+(b.totalFinal||0),0);
+  document.getElementById('stMonth').textContent   = mBanq.length;
+  document.getElementById('stRev').textContent     = fmt(revenue);
+  document.getElementById('stClients').textContent = clients.length;
+
+  const upcoming = [...banquets].filter(b=>b.status!=='cancelled').sort((a,b)=>new Date(a.date)-new Date(b.date)).slice(0,5);
+  const list = document.getElementById('dashList');
+  if (!upcoming.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div>Немає запланованих банкетів</div>`;
+  } else {
+    list.innerHTML = upcoming.map(b=>`
+      <div class="banquet-row" style="grid-template-columns:100px 1fr 140px 72px 120px 130px 100px" onclick="goTo('banquet-detail.html',{id:'${b.id}'})">
+        <div class="br-date">${fmtDate(b.date)}</div>
+        <div><div class="br-name">${b.clientName}</div>${b.comment?`<div class="br-note">${b.comment.slice(0,40)}${b.comment.length>40?'…':''}</div>`:''}</div>
+        <div class="br-phone">${b.clientPhone}</div>
+        <div class="br-guests">👥 ${b.guests}</div>
+        <div class="br-sum">${fmt(b.deposit)}</div>
+        <div class="br-sum acc">${fmt(b.totalFinal)}</div>
+        <div><span class="status-pill ${b.status}">${statusLabel(b.status)}</span></div>
+      </div>`).join('');
+  }
+
+  const repeat = clients.map(c=>({...c,...db_getClientStats(c.id)})).filter(c=>c.count>=2).sort((a,b)=>b.count-a.count).slice(0,6);
+  const rc = document.getElementById('repeatClients');
+  if (!repeat.length) {
+    rc.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">👥</div>Ще немає постійних клієнтів</div>`;
+  } else {
+    rc.innerHTML = repeat.map(c=>`
+      <div class="client-card" onclick="goTo('client-detail.html',{id:'${c.id}'})">
+        <div class="client-card-header">
+          <div class="client-avatar">${c.name.charAt(0)}</div>
+          <div><div class="client-name">${c.name}</div><div class="client-phone">${c.phone}</div></div>
+        </div>
+        <div class="client-stats">
+          <div class="client-stat acc"><div class="client-stat-val">${c.count}</div><div class="client-stat-lbl">Банкетів</div></div>
+          <div class="client-stat grn"><div class="client-stat-val" style="font-size:12px">${fmt(c.total)}</div><div class="client-stat-lbl">Виручка</div></div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+async function syncAll() {
+  showToast('🔄 Синхронізація...');
+  try {
+    await db_getBanquets({sync:true});
+    await db_getClients({sync:true});
+    render();
+    showToast('✅ Дані оновлено');
+  } catch { showToast('⚠️ Помилка синхронізації'); }
+}
+
+render();
+</script>
+</body>
+</html>

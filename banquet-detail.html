@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Банкет · ОГОнь</title>
+<link rel="stylesheet" href="style.css">
+<style>
+/* ══ VIEW / EDIT MODE TOGGLE ══ */
+.mode-view .edit-only { display: none !important; }
+.mode-edit .view-only { display: none !important; }
+
+/* ══ EDIT FIELDS inline ══ */
+.inline-input {
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 13px; font-weight: 600;
+  padding: 6px 10px; outline: none; transition: border-color .2s, box-shadow .2s;
+  width: 100%; max-width: 200px; text-align: right;
+}
+.inline-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(232,87,42,.12); }
+textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min-height: 56px; }
+
+/* ══ STATUS RADIO BUTTONS ══ */
+.status-radios { display: flex; gap: 7px; flex-wrap: wrap; }
+.status-radio-btn {
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700;
+  color: var(--text-dim); cursor: pointer; transition: all .18s; white-space: nowrap;
+  user-select: none;
+}
+.status-radio-btn:hover { border-color: var(--border2); color: var(--text); }
+.status-radio-btn.sel-confirmed { background: rgba(46,203,113,.12); border-color: var(--green); color: var(--green); }
+.status-radio-btn.sel-pending   { background: rgba(245,200,66,.1);  border-color: var(--yellow); color: var(--yellow); }
+.status-radio-btn.sel-cancelled { background: rgba(232,57,42,.1);   border-color: var(--red); color: var(--red); }
+
+/* ══ MODIFIER CHIPS in edit mode ══ */
+.mod-chips-wrap { display: flex; flex-direction: column; gap: 7px; }
+.mod-chips-row  { display: flex; align-items: center; gap: 8px; }
+.mod-chips-lbl  { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; min-width: 56px; }
+
+/* ══ DISH ROWS ══ */
+.dish-row { transition: background .15s; }
+.dish-row:hover { background: var(--surface2); border-radius: 8px; }
+
+/* Inline qty control in dish row */
+.dish-qty-ctrl {
+  display: flex; align-items: center; gap: 0;
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 20px; overflow: hidden;
+  transition: border-color .2s;
+}
+.dish-qty-ctrl.active { border-color: var(--accent); }
+.dqb {
+  background: none; border: none; color: var(--text-dim);
+  font-size: 15px; font-weight: 700;
+  width: 30px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  transition: color .15s, background .15s; flex-shrink: 0;
+}
+.dqb:hover { color: var(--accent); background: rgba(232,87,42,.08); }
+.dqn {
+  font-size: 13px; font-weight: 800; color: var(--text);
+  font-family: var(--fh); min-width: 24px; text-align: center; line-height: 28px;
+}
+
+/* Dish row layout */
+.dish-row-edit {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 14px; display: flex; align-items: center; gap: 12px;
+  margin-bottom: 6px;
+}
+.dish-row-edit-name { flex: 1; font-size: 13px; font-weight: 700; color: var(--text); }
+.dish-row-edit-price { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.dish-row-edit-sub   { font-family: var(--fh); font-size: 13px; font-weight: 700; color: var(--accent); min-width: 72px; text-align: right; white-space: nowrap; }
+.dish-row-edit-zero  { opacity: .35; }
+
+/* Unsaved badge */
+.unsaved-badge {
+  display: none; align-items: center; gap: 7px;
+  background: rgba(245,200,66,.09); border: 1px solid rgba(245,200,66,.3);
+  border-radius: var(--radius); padding: 9px 14px;
+  font-size: 12px; font-weight: 700; color: var(--yellow);
+}
+.unsaved-badge.show { display: flex; }
+
+/* Edit mode action bar (sticky bottom on mobile) */
+.edit-action-bar {
+  display: flex; gap: 10px; margin-top: 20px;
+  position: sticky; bottom: 12px; z-index: 50;
+}
+.btn-cancel-edit {
+  background: var(--surface2); border: 1.5px solid var(--border);
+  color: var(--text-dim); font-size: 12px; font-weight: 700;
+  padding: 12px 20px; border-radius: var(--radius);
+  transition: color .18s, border-color .18s; flex-shrink: 0;
+}
+.btn-cancel-edit:hover { color: var(--text); border-color: var(--border2); }
+.btn-save-all {
+  background: var(--accent); color: #fff; border: none;
+  font-family: var(--fh); font-size: 12px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+  padding: 12px 24px; border-radius: var(--radius); flex: 1;
+  box-shadow: 0 4px 16px rgba(232,87,42,.3);
+  transition: background .18s, transform .12s;
+}
+.btn-save-all:hover  { background: var(--accent2); transform: translateY(-1px); }
+.btn-save-all:active { transform: translateY(0); }
+.btn-save-all:disabled { opacity: .6; transform: none; cursor: not-allowed; }
+
+/* Totals summary card */
+.totals-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.tc-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-dim); font-weight: 500; }
+.tc-row.big { font-size: 17px; font-weight: 800; color: var(--text); font-family: var(--fh); }
+.tc-row.grn { color: var(--green); font-weight: 700; }
+.tc-val { font-weight: 700; color: var(--text); }
+.tc-div { height: 1px; background: var(--border); }
+
+/* ══ RESPONSIVE ══ */
+@media (max-width: 780px) {
+  .detail-grid { grid-template-columns: 1fr !important; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .inline-input { max-width: 100%; }
+  .status-radios { gap: 6px; }
+}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-logo" onclick="location.href='index.html'">🔥 ОГОнь</div>
+  <nav class="top-bar-nav">
+    <a class="nav-link" href="index.html">Головна</a>
+    <a class="nav-link" href="banquets.html">Банкети</a>
+    <a class="nav-link" href="clients.html">Клієнти</a>
+  </nav>
+  <div class="tbs"></div>
+  <!-- Edit / Done toggle -->
+  <button class="btn-ghost view-only" id="btnStartEdit" onclick="startEdit()" style="display:none">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    Редагувати
+  </button>
+  <a class="btn-primary" href="add.html">+ Новий банкет</a>
+</div>
+
+<div class="page-wrap fade-in" style="max-width:1060px">
+
+  <div class="page-header" style="margin-bottom:20px">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <a class="btn-back" href="banquets.html">← Всі банкети</a>
+      <div class="page-title" id="pageTitle">Завантаження...</div>
+      <div class="page-sub" id="pageSub"></div>
+    </div>
+    <!-- Status in view mode -->
+    <div class="view-only" id="statusViewWrap" style="display:none">
+      <div style="font-family:var(--fh);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Статус</div>
+      <span class="status-pill" id="statusPillView"></span>
+    </div>
+  </div>
+
+  <!-- UNSAVED BADGE -->
+  <div class="unsaved-badge edit-only" id="unsavedBadge">
+    ⚠️ Є незбережені зміни — натисніть «Зберегти» щоб підтвердити
+  </div>
+
+  <div id="detailGrid" style="display:none">
+    <div class="detail-grid" style="grid-template-columns:340px 1fr;align-items:start;gap:20px">
+
+      <!-- ═══ LEFT COLUMN ═══ -->
+      <div style="display:flex;flex-direction:column;gap:16px">
+
+        <!-- CLIENT CARD -->
+        <div class="info-card">
+          <div class="info-card-title">Клієнт</div>
+
+          <!-- View -->
+          <div class="view-only" id="clientInfoView"></div>
+
+          <!-- Edit -->
+          <div class="edit-only" style="display:none">
+            <div class="info-row">
+              <span class="info-key">Ім'я</span>
+              <input class="inline-input" type="text" id="e-name" placeholder="Ім'я клієнта">
+            </div>
+            <div class="info-row">
+              <span class="info-key">Телефон</span>
+              <input class="inline-input" type="tel" id="e-phone" placeholder="+380...">
+            </div>
+            <div id="clientLinkWrap" style="margin-top:12px"></div>
+          </div>
+        </div>
+
+        <!-- BANQUET CARD -->
+        <div class="info-card">
+          <div class="info-card-title">Деталі банкету</div>
+
+          <!-- View -->
+          <div class="view-only" id="banquetInfoView"></div>
+
+          <!-- Edit -->
+          <div class="edit-only" style="display:none">
+            <div class="info-row">
+              <span class="info-key">Дата</span>
+              <input class="inline-input" type="date" id="e-date">
+            </div>
+            <div class="info-row">
+              <span class="info-key">Гостей</span>
+              <input class="inline-input" type="number" id="e-guests" min="1" style="max-width:100px" oninput="recalc()">
+            </div>
+            <div class="info-row">
+              <span class="info-key">Залог (₴)</span>
+              <input class="inline-input" type="number" id="e-deposit" min="0" style="max-width:130px">
+            </div>
+            <div class="info-row" style="align-items:flex-start">
+              <span class="info-key" style="padding-top:8px">Коментар</span>
+              <textarea class="inline-input" id="e-comment" style="max-width:100%;margin-left:auto" placeholder="Тематика, алергії..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- FINANCIALS CARD -->
+        <div class="info-card">
+          <div class="info-card-title">Фінанси</div>
+
+          <!-- View -->
+          <div class="view-only" id="financialInfoView"></div>
+
+          <!-- Edit: live totals + modifier -->
+          <div class="edit-only" style="display:none">
+            <div style="margin-bottom:14px">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">Модифікатор</div>
+              <div class="mod-chips-wrap">
+                <div class="mod-chips-row">
+                  <span class="mod-chips-lbl" style="color:var(--accent)">Наценка</span>
+                  <div class="chips">
+                    <div class="chip" data-t="s" data-v="10" onclick="pickMod(this)">+10%</div>
+                    <div class="chip" data-t="s" data-v="20" onclick="pickMod(this)">+20%</div>
+                    <div class="chip" data-t="s" data-v="30" onclick="pickMod(this)">+30%</div>
+                  </div>
+                </div>
+                <div class="mod-chips-row">
+                  <span class="mod-chips-lbl" style="color:var(--green)">Знижка</span>
+                  <div class="chips">
+                    <div class="chip" data-t="d" data-v="10" onclick="pickMod(this)">−10%</div>
+                    <div class="chip" data-t="d" data-v="20" onclick="pickMod(this)">−20%</div>
+                    <div class="chip" data-t="d" data-v="30" onclick="pickMod(this)">−30%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tc-div" style="margin-bottom:12px"></div>
+            <div class="totals-card" id="liveTotals">
+              <div class="tc-row"><span>Без наценки:</span><span class="tc-val" id="lt-base">—</span></div>
+              <div class="tc-row" id="lt-mod-row" style="display:none"><span id="lt-mod-lbl"></span><span class="tc-val" id="lt-mod-val"></span></div>
+              <div class="tc-div"></div>
+              <div class="tc-row big"><span>Підсумок:</span><span id="lt-final">—</span></div>
+              <div class="tc-row grn" id="lt-pp-row" style="display:none"><span>На людину:</span><span id="lt-pp">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STATUS CARD (edit mode only) -->
+        <div class="info-card edit-only" style="display:none">
+          <div class="info-card-title">Статус</div>
+          <div class="status-radios" id="statusRadios">
+            <button class="status-radio-btn" data-s="pending"   onclick="pickStatus(this)">⏳ Очікує</button>
+            <button class="status-radio-btn" data-s="confirmed" onclick="pickStatus(this)">✅ Підтверджено</button>
+            <button class="status-radio-btn" data-s="cancelled" onclick="pickStatus(this)">❌ Скасовано</button>
+          </div>
+        </div>
+
+        <!-- ACTION BAR -->
+        <div class="edit-action-bar edit-only" style="display:none">
+          <button class="btn-cancel-edit" onclick="cancelEdit()">Скасувати</button>
+          <button class="btn-save-all" id="btnSaveAll" onclick="saveAll()">💾 Зберегти всі зміни</button>
+        </div>
+      </div>
+
+      <!-- ═══ RIGHT COLUMN — DISHES ═══ -->
+      <div>
+        <div class="info-card">
+          <div class="info-card-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span>Замовлені страви</span>
+            <span class="edit-only" id="dishEditHint" style="display:none;font-size:10px;color:var(--text-muted);font-weight:600;text-transform:none;letter-spacing:0">Змінюйте кількість нижче</span>
+          </div>
+
+          <!-- VIEW mode dish list -->
+          <div class="view-only dishes-list" id="dishesListView"></div>
+
+          <!-- EDIT mode dish list (all dishes with qty controls) -->
+          <div class="edit-only" id="dishesListEdit" style="display:none"></div>
+
+          <!-- Totals footer (both modes) -->
+          <div id="dishesTotalView" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)"></div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /detailGrid -->
+
+  <div id="notFound" style="display:none">
+    <div class="empty-state"><div class="empty-icon">❓</div>Банкет не знайдено</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="db.js"></script>
+<script>
+db_seed(); renderOfflineBanner();
+
+/* ── STATE ── */
+const BID    = getParam('id');
+let b        = BID ? db_getBanquet(BID) : null;
+let editMode = false;
+let menuData = [];
+// mutable state while editing
+let eQty     = {};   // dishId → qty
+let eMod     = 0;    // modifier %
+let eStatus  = '';
+
+/* ── INIT ── */
+if (!b) {
+  document.getElementById('notFound').style.display = 'block';
+  document.getElementById('pageTitle').textContent  = 'Банкет не знайдено';
+} else {
+  loadMenuThenRender();
+}
+
+async function loadMenuThenRender() {
+  try { const r = await fetch('./menu.json'); menuData = await r.json(); }
+  catch {
+    menuData = [{ id:'demo', name:'Демо', sort_order:1, dishes:[
+      {id:'d1',name:'Філадельфія Класік',price:340,weight:'290г',extras:[],image_url:''},
+      {id:'d2',name:'Самурай',price:425,weight:'330г',extras:[],image_url:''},
+      {id:'d3',name:'Хачапурі',price:290,weight:'400г',extras:[],image_url:''},
+      {id:'d4',name:'Шашлик',price:380,weight:'300г',extras:[],image_url:''},
+      {id:'d5',name:'Вогняний Дракон',price:445,weight:'340г',extras:[],image_url:''},
+      {id:'d6',name:'Канада',price:410,weight:'270г',extras:[],image_url:''},
+    ]}];
+  }
+  renderView();
+  document.getElementById('detailGrid').style.display = 'block';
+  document.getElementById('btnStartEdit').style.display = 'inline-flex';
+}
+
+/* ══════════════════════════════════════════
+   VIEW MODE
+══════════════════════════════════════════ */
+function renderView() {
+  b = db_getBanquet(BID);
+  document.title = `Банкет · ${b.clientName} · ${fmtDate(b.date)}`;
+  document.getElementById('pageTitle').textContent = `Банкет · ${b.clientName}`;
+  document.getElementById('pageSub').textContent   = `${fmtDate(b.date)} · 👥 ${b.guests} гостей`;
+
+  // Status pill
+  const spv = document.getElementById('statusPillView');
+  spv.className = `status-pill ${b.status}`;
+  spv.textContent = statusLabel(b.status);
+  document.getElementById('statusViewWrap').style.display = 'block';
+
+  // Client
+  const client = b.clientId ? db_getClient(b.clientId) : null;
+  const stats  = client ? db_getClientStats(client.id) : null;
+  document.getElementById('clientInfoView').innerHTML = `
+    <div class="info-row"><span class="info-key">Ім'я</span><span class="info-val">${b.clientName}</span></div>
+    <div class="info-row"><span class="info-key">Телефон</span><span class="info-val">${b.clientPhone}</span></div>
+    ${stats ? `<div class="info-row"><span class="info-key">Банкетів загалом</span><span class="info-val acc">${stats.count}</span></div>` : ''}
+    ${stats ? `<div class="info-row"><span class="info-key">Виручка з клієнта</span><span class="info-val grn">${fmt(stats.total)}</span></div>` : ''}
+    ${client ? `<div style="margin-top:12px"><a href="client-detail.html?id=${client.id}" class="btn-back" style="font-size:12px;padding:7px 13px">👤 Профіль клієнта →</a></div>` : ''}
+  `;
+
+  // Banquet details
+  document.getElementById('banquetInfoView').innerHTML = `
+    <div class="info-row"><span class="info-key">Дата</span><span class="info-val">${fmtDate(b.date)}</span></div>
+    <div class="info-row"><span class="info-key">Гостей</span><span class="info-val">👥 ${b.guests}</span></div>
+    <div class="info-row"><span class="info-key">Залог</span><span class="info-val">${fmt(b.deposit)}</span></div>
+    ${b.comment ? `<div class="info-row"><span class="info-key">Коментар</span><span class="info-val" style="font-weight:500;font-size:12px;max-width:200px;text-align:right;line-height:1.45">${b.comment}</span></div>` : ''}
+    <div class="info-row"><span class="info-key">Створено</span><span class="info-val" style="font-weight:500;color:var(--text-dim)">${b.createdAt ? new Date(b.createdAt).toLocaleDateString('uk-UA') : '—'}</span></div>
+  `;
+
+  // Financials
+  const modAmt = (b.totalFinal||0) - (b.totalBase||0);
+  document.getElementById('financialInfoView').innerHTML = `
+    <div class="info-row"><span class="info-key">Без наценки</span><span class="info-val">${fmt(b.totalBase)}</span></div>
+    ${b.modifier ? `<div class="info-row"><span class="info-key">Модифікатор</span><span class="info-val" style="color:${b.modifier>0?'var(--accent)':'var(--green)'}">${b.modLabel} (${b.modifier>0?'+':''}${fmt(modAmt)})</span></div>` : ''}
+    <div class="info-row"><span class="info-key">Підсумок</span><span class="info-val acc" style="font-size:16px;font-family:var(--fh)">${fmt(b.totalFinal)}</span></div>
+    <div class="info-row"><span class="info-key">На людину</span><span class="info-val grn">${b.guests ? fmt(Math.round((b.totalBase||0) / b.guests)) : '—'}</span></div>
+  `;
+
+  // Dishes — view mode
+  const dishes = b.dishes || [];
+  document.getElementById('dishesListView').innerHTML = !dishes.length
+    ? '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Список страв не вказано</div>'
+    : dishes.map(d => `
+        <div class="dish-row" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;display:flex;align-items:center;gap:12px;margin-bottom:6px">
+          <div style="flex:1;font-size:14px;font-weight:700;color:var(--text)">${d.name}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 11px">×${d.qty}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${fmt(d.price)}</div>
+          <div style="font-family:var(--fh);font-size:13px;font-weight:700;color:var(--accent);min-width:72px;text-align:right">${fmt(d.price*d.qty)}</div>
+        </div>`).join('');
+  renderDishTotal();
+}
+
+function renderDishTotal() {
+  const dishes = editMode
+    ? getAllDishesWithQty().filter(d => d.qty > 0)
+    : (b.dishes || []);
+  const total = dishes.reduce((s,d) => s + d.price * d.qty, 0);
+  const count = dishes.reduce((s,d) => s + d.qty, 0);
+  document.getElementById('dishesTotalView').innerHTML = dishes.length ? `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em">${dishes.length} позицій · ${count} шт.</span>
+      <span style="font-family:var(--fh);font-size:16px;font-weight:700;color:var(--accent)">${fmt(total)}</span>
+    </div>` : '';
+}
+
+/* ══════════════════════════════════════════
+   EDIT MODE
+══════════════════════════════════════════ */
+function startEdit() {
+  editMode = true;
+
+  // Snapshot current values
+  eStatus = b.status;
+  eMod    = b.modifier || 0;
+  eQty    = {};
+  // Pre-fill from saved dishes
+  const savedDishes = b.dishes || [];
+  savedDishes.forEach(d => {
+    const realId = findDishIdByName(d.name) || d.id || d.name;
+    eQty[realId] = d.qty;
+  });
+
+  // Fill text inputs
+  document.getElementById('e-name').value    = b.clientName    || '';
+  document.getElementById('e-phone').value   = b.clientPhone   || '';
+  document.getElementById('e-date').value    = b.date          || '';
+  document.getElementById('e-guests').value  = b.guests        || '';
+  document.getElementById('e-deposit').value = b.deposit       || '';
+  document.getElementById('e-comment').value = b.comment       || '';
+
+  // Client link
+  const client = b.clientId ? db_getClient(b.clientId) : null;
+  document.getElementById('clientLinkWrap').innerHTML = client
+    ? `<a href="client-detail.html?id=${client.id}" class="btn-back" style="font-size:12px;padding:7px 13px">👤 Профіль клієнта →</a>` : '';
+
+  // Status radios
+  document.querySelectorAll('.status-radio-btn').forEach(btn => {
+    btn.className = `status-radio-btn${btn.dataset.s === eStatus ? ' sel-'+eStatus : ''}`;
+  });
+
+  // Modifier chips
+  if (eMod !== 0) {
+    document.querySelectorAll('.chip').forEach(c => {
+      const t = c.dataset.t, v = parseInt(c.dataset.v);
+      if ((t==='s' && eMod===v) || (t==='d' && eMod===-v)) c.classList.add(t==='s'?'s-on':'d-on');
+    });
+  }
+
+  // Render edit dish list
+  renderEditDishes();
+  recalc();
+
+  // Switch DOM classes
+  setMode('edit');
+}
+
+function cancelEdit() {
+  // Reset any chip state
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
+  editMode = false;
+  document.getElementById('unsavedBadge').classList.remove('show');
+  setMode('view');
+  renderView();
+}
+
+function setMode(m) {
+  const wrap = document.getElementById('detailGrid');
+  wrap.classList.remove('mode-view','mode-edit');
+  wrap.classList.add('mode-'+m);
+  document.getElementById('btnStartEdit').style.display = m==='view' ? 'inline-flex' : 'none';
+  document.getElementById('statusViewWrap').style.display = m==='view' ? 'block' : 'none';
+}
+
+/* ── EDIT DISHES LIST ── */
+function renderEditDishes() {
+  const el = document.getElementById('dishesListEdit');
+  // Flatten all dishes from menu
+  const allDishes = menuData.flatMap(cat => cat.dishes);
+  el.innerHTML = allDishes.map(d => {
+    const qty = eQty[d.id] || 0;
+    return `
+      <div class="dish-row-edit ${qty===0?'dish-row-edit-zero':''}" id="dre-${d.id}">
+        <div class="dish-row-edit-name">${d.name}</div>
+        <div class="dish-row-edit-price">${fmt(d.price)}</div>
+        <div class="dish-qty-ctrl ${qty>0?'active':''}">
+          <button class="dqb" onclick="editChgQty('${d.id}',-1,${d.price})">−</button>
+          <div class="dqn" id="dreqty-${d.id}">${qty}</div>
+          <button class="dqb" onclick="editChgQty('${d.id}',+1,${d.price})">+</button>
+        </div>
+        <div class="dish-row-edit-sub" id="dresub-${d.id}">${qty>0?fmt(d.price*qty):'—'}</div>
+      </div>`;
+  }).join('');
+}
+
+function editChgQty(id, delta, price) {
+  eQty[id] = Math.max(0, (eQty[id]||0) + delta);
+  const qty = eQty[id];
+  document.getElementById('dreqty-'+id).textContent = qty;
+  document.getElementById('dresub-'+id).textContent = qty > 0 ? fmt(price*qty) : '—';
+  const ctrl = document.querySelector(`#dre-${id} .dish-qty-ctrl`);
+  if (ctrl) ctrl.classList.toggle('active', qty > 0);
+  document.getElementById('dre-'+id).classList.toggle('dish-row-edit-zero', qty === 0);
+  markUnsaved();
+  recalc();
+  renderDishTotal();
+}
+
+/* ── MODIFIER ── */
+function pickMod(chip) {
+  const was = chip.classList.contains('s-on') || chip.classList.contains('d-on');
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
+  if (was) { eMod = 0; } else {
+    eMod = chip.dataset.t === 's' ? +chip.dataset.v : -chip.dataset.v;
+    chip.classList.add(chip.dataset.t === 's' ? 's-on' : 'd-on');
+  }
+  markUnsaved(); recalc();
+}
+
+/* ── STATUS ── */
+function pickStatus(btn) {
+  eStatus = btn.dataset.s;
+  document.querySelectorAll('.status-radio-btn').forEach(b => {
+    b.className = `status-radio-btn${b.dataset.s===eStatus?' sel-'+eStatus:''}`;
+  });
+  markUnsaved();
+}
+
+/* ── LIVE RECALC ── */
+function recalc() {
+  const base   = calcEditBase();
+  const modAmt = Math.round(base * eMod / 100);
+  const final  = base + modAmt;
+  const guests = parseInt(document.getElementById('e-guests').value) || 0;
+
+  document.getElementById('lt-base').textContent  = fmt(base);
+  document.getElementById('lt-final').textContent = fmt(final);
+
+  const mr = document.getElementById('lt-mod-row');
+  if (eMod !== 0) {
+    mr.style.display = 'flex';
+    document.getElementById('lt-mod-lbl').textContent = eMod > 0 ? `Наценка +${eMod}%:` : `Знижка ${eMod}%:`;
+    const mv = document.getElementById('lt-mod-val');
+    mv.textContent = (eMod > 0 ? '+' : '') + fmt(modAmt);
+    mv.style.color = eMod > 0 ? 'var(--accent)' : 'var(--green)';
+  } else mr.style.display = 'none';
+
+  const pp = document.getElementById('lt-pp-row');
+  if (guests > 0 && base > 0) {
+    pp.style.display = 'flex';
+    document.getElementById('lt-pp').textContent = fmt(Math.round(base / guests));
+  } else pp.style.display = 'none';
+}
+
+function calcEditBase() {
+  return Object.entries(eQty).reduce((s, [id, qty]) => {
+    if (!qty) return s;
+    const d = findDishById(id);
+    return s + (d ? d.price * qty : 0);
+  }, 0);
+}
+
+function getAllDishesWithQty() {
+  return Object.entries(eQty)
+    .filter(([,q]) => q > 0)
+    .map(([id, qty]) => { const d = findDishById(id); return d ? { ...d, qty } : null; })
+    .filter(Boolean);
+}
+
+function markUnsaved() {
+  document.getElementById('unsavedBadge').classList.add('show');
+}
+
+/* ── SAVE ── */
+async function saveAll() {
+  const name    = document.getElementById('e-name').value.trim();
+  const phone   = document.getElementById('e-phone').value.trim();
+  const date    = document.getElementById('e-date').value;
+  const guests  = parseInt(document.getElementById('e-guests').value);
+  const deposit = parseInt(document.getElementById('e-deposit').value) || 0;
+  const comment = document.getElementById('e-comment').value.trim();
+
+  if (!name || !phone || !date || !guests) {
+    showToast('⚠️ Заповніть: ім\'я, телефон, дату, гостей');
+    return;
+  }
+
+  const base     = calcEditBase();
+  const modAmt   = Math.round(base * eMod / 100);
+  const final    = base + modAmt;
+  const modLabel = eMod > 0 ? `+${eMod}%` : eMod < 0 ? `${eMod}%` : 'без';
+  const dishes   = getAllDishesWithQty().map(d => ({ id:d.id, name:d.name, qty:d.qty, price:d.price }));
+
+  const btn = document.getElementById('btnSaveAll');
+  btn.disabled = true; btn.textContent = '⏳ Збереження...';
+
+  try {
+    await db_updateBanquet(BID, {
+      clientName: name, clientPhone: phone, date, guests, deposit, comment,
+      status: eStatus, modifier: eMod, modLabel,
+      totalBase: base, totalFinal: final, dishes,
+    });
+    b = db_getBanquet(BID);
+
+    // Reset chip state
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
+    editMode = false;
+    document.getElementById('unsavedBadge').classList.remove('show');
+    setMode('view');
+    renderView();
+    showToast('✅ Зміни збережено');
+  } catch(err) {
+    showToast('⚠️ Помилка: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Зберегти всі зміни';
+  }
+}
+
+/* ── HELPERS ── */
+function findDishById(id) {
+  for (const cat of menuData) for (const d of cat.dishes) if (d.id === id) return d;
+  return null;
+}
+function findDishIdByName(name) {
+  for (const cat of menuData) for (const d of cat.dishes) if (d.name === name) return d.id;
+  return null;
+}
+
+window.addEventListener('beforeunload', e => {
+  if (editMode && document.getElementById('unsavedBadge').classList.contains('show')) {
+    e.preventDefault(); e.returnValue = '';
+  }
+});
+</script>
+</body>
+</html>

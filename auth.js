@@ -11,7 +11,7 @@
 (function () {
   // ─── Налаштування ───────────────────────────────────────────────────────
   // !! Замінити на реальний URL твого Cloudflare Worker !!
-  var WORKER_URL = "dark-morning-bd95.skifchaqwerty.workers.dev";
+  var WORKER_URL = "https://dark-morning-bd95.skifchaqwerty.workers.dev";
 
   var TOKEN_KEY  = "ogonh_token";
   var LOGIN_PAGE = "login.html";

@@ -13,7 +13,7 @@
    • Якщо Sheets недоступний — продовжує працювати офлайн
 ══════════════════════════════════════════════════════════════ */
 
-const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyMUOreA95Zpu4kwohw6rB09K6X_rUGQvhjXvVo7hfuUrfeXRJ8nfSUOSP68Hj_mujP/exec'; // ← вставити URL після деплою Apps Script
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzu0I7ljbIiQLXSRHG03KvPkeC3-SAHEoE3ZhWCekv4RAe-RYzeROfKQU8Wvj5_BRI/exec'; // ← вставити URL після деплою Apps Script
                         // вигляд: https://script.google.com/macros/s/ABC.../exec
 
 /* ── CACHE KEYS ── */

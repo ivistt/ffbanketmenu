@@ -269,6 +269,10 @@ let categories = [], dishes = [];
 let activeCatId  = null;
 let statusFilter = 'all';
 
+// Зберігаємо об'єкти окремо — не передаємо JSON в onclick
+const _dishMap = new Map();
+const _catMap  = new Map();
+
 // ── DELETE helper (відсутній в db.js, але Worker його підтримує) ─
 async function api_delete(table, id) {
   const res = await fetch(`${API_URL}/${table}?id=eq.${encodeURIComponent(id)}`, {
@@ -286,6 +290,8 @@ async function loadAll() {
       api_get('menu_dishes',     'order=sort_order.asc,name.asc'),
     ]);
     if (typeof db_clearMenuCache === 'function') db_clearMenuCache();
+    _dishMap.clear(); dishes.forEach(d => _dishMap.set(d.id, d));
+    _catMap.clear();  categories.forEach(c => _catMap.set(c.id, c));
     renderCats();
     applyFilter();
     document.getElementById('pageSub').textContent =
@@ -308,16 +314,23 @@ function renderCats() {
   </div>`;
 
   categories.forEach(c => {
-    const safe = escAttr(JSON.stringify(c));
-    html += `<div class="cat-item ${activeCatId === c.id ? 'active' : ''}" onclick="selectCat('${c.id}')">
+    html += `<div class="cat-item ${activeCatId === c.id ? 'active' : ''}" data-cat-id="${c.id}">
       <span>${c.icon || '🍴'}</span>
       <span class="cat-item-name">${escHtml(c.name)}</span>
       <span class="cat-item-count">${countMap[c.id] || 0}</span>
-      <span class="cat-item-edit" onclick="event.stopPropagation();openCatModal('${safe}')">✏️</span>
+      <span class="cat-item-edit" data-edit-cat="${c.id}">✏️</span>
     </div>`;
   });
 
-  document.getElementById('catList').innerHTML = html;
+  const list = document.getElementById('catList');
+  list.innerHTML = html;
+
+  list.querySelectorAll('.cat-item[data-cat-id]').forEach(el => {
+    el.addEventListener('click', () => selectCat(el.dataset.catId));
+  });
+  list.querySelectorAll('[data-edit-cat]').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); openCatModal(_catMap.get(el.dataset.editCat)); });
+  });
 }
 
 function selectCat(id) {
@@ -358,8 +371,7 @@ function renderDishes(list) {
     const imgEl  = d.image_url
       ? `<div class="dish-img"><img src="${escHtml(d.image_url)}" alt="${escHtml(d.name)}" loading="lazy" onerror="this.parentElement.innerHTML='🍽'"></div>`
       : `<div class="dish-img">🍽</div>`;
-    const safe = escAttr(JSON.stringify(d));
-    return `<div class="dish-card ${active ? '' : 'inactive'}" onclick="openDishModal('${safe}')">
+    return `<div class="dish-card ${active ? '' : 'inactive'}" data-dish-id="${escHtml(d.id)}">
       <div class="dish-edit-badge">✏️ Редагувати</div>
       ${imgEl}
       <div class="dish-body">
@@ -376,13 +388,15 @@ function renderDishes(list) {
       </div>
     </div>`;
   }).join('');
+
+  // Вішаємо обробники через JS — без onclick в HTML
+  grid.querySelectorAll('.dish-card[data-dish-id]').forEach(el => {
+    el.addEventListener('click', () => openDishModal(_dishMap.get(el.dataset.dishId)));
+  });
 }
 
 function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function escAttr(s) {
-  return String(s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 }
 function fmtPrice(n) {
   return (n == null) ? '—' : Number(n).toLocaleString('uk-UA') + ' ₴';
@@ -398,8 +412,8 @@ function previewImg() {
 }
 
 // ── Dish Modal ─────────────────────────────────────────────────
-function openDishModal(dishOrJson) {
-  const d = dishOrJson ? (typeof dishOrJson === 'string' ? JSON.parse(dishOrJson) : dishOrJson) : null;
+function openDishModal(d) {
+  // d — об'єкт страви або null (нова страва)
   const isEdit = !!d;
 
   document.getElementById('dishModalTitle').textContent = isEdit ? 'Редагувати страву' : 'Нова страва';
@@ -476,8 +490,8 @@ async function deleteDish() {
 }
 
 // ── Category Modal ─────────────────────────────────────────────
-function openCatModal(catOrJson) {
-  const c = catOrJson ? (typeof catOrJson === 'string' ? JSON.parse(catOrJson) : catOrJson) : null;
+function openCatModal(c) {
+  // c — об'єкт категорії або null (нова)
   const isEdit = !!c;
   document.getElementById('catModalTitle').textContent = isEdit ? 'Редагувати категорію' : 'Нова категорія';
   document.getElementById('catId').value   = c?.id         || '';

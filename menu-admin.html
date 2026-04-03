@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Меню · ОГОнь Адмін</title>
+<script src="auth.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+/* ── Layout ── */
+.menu-layout { display: grid; grid-template-columns: 256px 1fr; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .menu-layout { grid-template-columns: 1fr; } }
+
+/* ── Category sidebar ── */
+.cat-sidebar { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; position: sticky; top: 72px; }
+.cat-sidebar-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); }
+.cat-sidebar-title { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.cat-list { padding: 6px; display: flex; flex-direction: column; gap: 2px; max-height: 460px; overflow-y: auto; }
+.cat-item { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; cursor: pointer; transition: background .15s; font-size: 13px; color: var(--text-dim); user-select: none; }
+.cat-item:hover { background: var(--surface2); color: var(--text); }
+.cat-item.active { background: rgba(232,87,42,.12); color: var(--accent); font-weight: 700; }
+.cat-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-item-count { font-size: 11px; background: var(--surface2); border-radius: 20px; padding: 1px 7px; color: var(--text-muted); flex-shrink: 0; }
+.cat-item.active .cat-item-count { background: rgba(232,87,42,.18); color: var(--accent); }
+.cat-item-edit { opacity: 0; font-size: 11px; padding: 2px 6px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); transition: opacity .15s; flex-shrink: 0; }
+.cat-item:hover .cat-item-edit { opacity: 1; }
+.cat-actions { padding: 8px 6px 6px; border-top: 1px solid var(--border); }
+
+/* ── Dishes grid ── */
+.dishes-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.dishes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 12px; }
+
+/* ── Dish card ── */
+.dish-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: border-color .18s, transform .15s; cursor: pointer; position: relative; }
+.dish-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+.dish-card.inactive { opacity: .52; }
+.dish-img { width: 100%; height: 148px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 36px; color: var(--text-muted); overflow: hidden; }
+.dish-img img { width: 100%; height: 100%; object-fit: cover; }
+.dish-edit-badge { position: absolute; top: 9px; right: 9px; background: rgba(15,15,19,.78); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,.1); border-radius: 7px; padding: 4px 10px; font-size: 11px; font-weight: 700; color: var(--text-dim); opacity: 0; transition: opacity .15s; pointer-events: none; }
+.dish-card:hover .dish-edit-badge { opacity: 1; }
+.dish-body { padding: 13px 15px 14px; }
+.dish-name { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.dish-desc { font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-bottom: 9px; min-height: 16px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.dish-meta { font-size: 10px; color: var(--text-muted); margin-bottom: 8px; }
+.dish-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dish-price { font-family: var(--fh); font-size: 17px; font-weight: 800; color: var(--accent); }
+.dish-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+.badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px; letter-spacing: .03em; }
+.badge-active { background: rgba(46,203,113,.13); color: var(--green); border: 1px solid rgba(46,203,113,.28); }
+.badge-hidden { background: rgba(255,255,255,.05); color: var(--text-muted); border: 1px solid var(--border); }
+.badge-cat    { background: rgba(232,87,42,.1); color: var(--accent); border: 1px solid rgba(232,87,42,.22); }
+
+/* ── Modal ── */
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.68); backdrop-filter: blur(5px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.modal-bg.open { opacity: 1; pointer-events: all; }
+.modal { background: var(--surface); border: 1.5px solid var(--border); border-radius: 18px; width: 100%; max-width: 520px; max-height: 92vh; overflow-y: auto; box-shadow: 0 32px 80px rgba(0,0,0,.55); transform: translateY(14px) scale(.985); transition: transform .22s; }
+.modal-bg.open .modal { transform: none; }
+.modal-head { padding: 22px 26px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.modal-title { font-size: 19px; font-weight: 800; color: var(--text); }
+.modal-close { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-size: 16px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; transition: background .15s; flex-shrink: 0; }
+.modal-close:hover { background: var(--border); color: var(--text); }
+.modal-body { padding: 18px 26px 26px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Form ── */
+.field { display: flex; flex-direction: column; gap: 7px; }
+.field-label { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); }
+.field-input, .field-select, .field-textarea {
+  background: var(--bg); border: 1.5px solid var(--border); border-radius: 9px;
+  padding: 11px 13px; font-size: 14px; color: var(--text); outline: none;
+  transition: border-color .18s; font-family: inherit; width: 100%; box-sizing: border-box;
+}
+.field-input:focus, .field-select:focus, .field-textarea:focus { border-color: var(--accent); }
+.field-textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
+.field-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; padding-right: 34px; }
+.field-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* image preview */
+.img-preview-box { width: 100%; height: 128px; background: var(--surface2); border: 1.5px dashed var(--border); border-radius: 9px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-top: 4px; }
+.img-preview-box img { width: 100%; height: 100%; object-fit: cover; }
+.img-preview-ph { font-size: 12px; color: var(--text-muted); text-align: center; padding: 12px; }
+
+/* toggle */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border-radius: 9px; padding: 13px 15px; }
+.toggle-info { display: flex; flex-direction: column; gap: 2px; }
+.toggle-info-label { font-size: 14px; font-weight: 600; color: var(--text); }
+.toggle-info-sub   { font-size: 11px; color: var(--text-muted); }
+.toggle { position: relative; width: 42px; height: 23px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; inset: 0; background: var(--border); border-radius: 23px; transition: background .18s; cursor: pointer; }
+.toggle-slider::before { content: ''; position: absolute; width: 17px; height: 17px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .18s; }
+.toggle input:checked + .toggle-slider { background: var(--accent); }
+.toggle input:checked + .toggle-slider::before { transform: translateX(19px); }
+
+/* modal footer */
+.modal-footer { display: flex; gap: 10px; justify-content: flex-end; padding-top: 2px; }
+.btn-danger { background: rgba(239,68,68,.1); border: 1.5px solid rgba(239,68,68,.28); color: #ef4444; border-radius: 9px; padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .15s; }
+.btn-danger:hover { background: rgba(239,68,68,.2); }
+
+.cat-modal { max-width: 380px; }
+.dishes-empty { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <nav class="top-bar-nav">
+    <a class="nav-link" href="index.html">Головна</a>
+    <a class="nav-link" href="banquets.html">Банкети</a>
+    <a class="nav-link" href="clients.html">Клієнти</a>
+    <a class="nav-link active" href="menu-admin.html">Меню</a>
+  </nav>
+  <div class="tbs"></div>
+  <a class="btn-primary" href="add.html">+ Новий банкет</a>
+</div>
+
+<div class="page-wrap-wide fade-in" style="max-width:1280px">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Управління меню</div>
+      <div class="page-sub" id="pageSub">Завантаження...</div>
+    </div>
+    <div class="controls-row">
+      <input class="search-input" id="searchInput" type="text" placeholder="🔍 Назва страви..." oninput="applyFilter()" style="width:210px">
+      <button class="btn-ghost" onclick="loadAll()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Оновити
+      </button>
+    </div>
+  </div>
+
+  <div class="filter-tabs" style="margin-bottom:18px">
+    <button class="filter-tab active" data-f="all"    onclick="setStatusFilter(this)">Всі</button>
+    <button class="filter-tab" data-f="active"        onclick="setStatusFilter(this)">✅ Активні</button>
+    <button class="filter-tab" data-f="hidden"        onclick="setStatusFilter(this)">👁 Приховані</button>
+  </div>
+
+  <div class="menu-layout">
+    <!-- Sidebar -->
+    <div class="cat-sidebar">
+      <div class="cat-sidebar-head"><div class="cat-sidebar-title">Категорії</div></div>
+      <div class="cat-list" id="catList">
+        <div class="loader-wrap"><div class="loader-dots"><span></span><span></span><span></span></div></div>
+      </div>
+      <div class="cat-actions">
+        <button class="btn-ghost" style="width:100%;justify-content:center;font-size:13px" onclick="openCatModal(null)">+ Нова категорія</button>
+      </div>
+    </div>
+
+    <!-- Dishes -->
+    <div>
+      <div class="dishes-head">
+        <div style="font-size:14px;font-weight:700;color:var(--text)" id="dishesTitle">Всі страви</div>
+        <button class="btn-primary" onclick="openDishModal(null)">+ Додати страву</button>
+      </div>
+      <div class="dishes-grid" id="dishesGrid">
+        <div class="loader-wrap" style="grid-column:1/-1"><div class="loader-dots"><span></span><span></span><span></span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Dish Modal ─────────────────────────────────────────── -->
+<div class="modal-bg" id="dishModalBg" onclick="bgClose('dishModalBg',event)">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="dishModalTitle">Нова страва</div>
+      <button class="modal-close" onclick="closeModal('dishModalBg')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="dishId">
+
+      <div class="field">
+        <label class="field-label">Назва *</label>
+        <input class="field-input" id="dishName" type="text" placeholder="Наприклад: Салат Цезар">
+      </div>
+
+      <div class="field">
+        <label class="field-label">Опис</label>
+        <textarea class="field-textarea" id="dishDesc" placeholder="Короткий опис..."></textarea>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Склад / Інгредієнти</label>
+        <textarea class="field-textarea" id="dishComposition" placeholder="Курка, помідор, сир..."></textarea>
+      </div>
+
+      <div class="field-row-2">
+        <div class="field">
+          <label class="field-label">Ціна (грн) *</label>
+          <input class="field-input" id="dishPrice" type="number" min="0" step="1" placeholder="0">
+        </div>
+        <div class="field">
+          <label class="field-label">Вага / Об'єм</label>
+          <input class="field-input" id="dishWeight" type="text" placeholder="250 г">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Категорія *</label>
+        <select class="field-select" id="dishCategory"></select>
+      </div>
+
+      <div class="field">
+        <label class="field-label">URL зображення</label>
+        <input class="field-input" id="dishImage" type="url" placeholder="https://..." oninput="previewImg()">
+        <div class="img-preview-box" id="imgPreview">
+          <div class="img-preview-ph">🖼 Вставте URL — побачите прев'ю</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Порядок сортування</label>
+        <input class="field-input" id="dishSort" type="number" min="0" placeholder="0">
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-info-label">Активна</div>
+          <div class="toggle-info-sub">Відображається у меню для гостей</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="dishActive" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-danger" id="dishDeleteBtn" style="display:none;margin-right:auto" onclick="deleteDish()">Видалити</button>
+        <button class="btn-ghost" onclick="closeModal('dishModalBg')">Скасувати</button>
+        <button class="btn-primary" onclick="saveDish()">Зберегти</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Category Modal ─────────────────────────────────────── -->
+<div class="modal-bg" id="catModalBg" onclick="bgClose('catModalBg',event)">
+  <div class="modal cat-modal">
+    <div class="modal-head">
+      <div class="modal-title" id="catModalTitle">Нова категорія</div>
+      <button class="modal-close" onclick="closeModal('catModalBg')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="catId">
+      <div class="field">
+        <label class="field-label">Назва *</label>
+        <input class="field-input" id="catName" type="text" placeholder="Наприклад: Салати">
+      </div>
+      <div class="field">
+        <label class="field-label">Іконка (емодзі)</label>
+        <input class="field-input" id="catIcon" type="text" placeholder="🥗" maxlength="4" style="font-size:22px;text-align:center;letter-spacing:4px">
+      </div>
+      <div class="field">
+        <label class="field-label">Порядок сортування</label>
+        <input class="field-input" id="catSort" type="number" min="0" placeholder="0">
+      </div>
+      <div class="modal-footer">
+        <button class="btn-danger" id="catDeleteBtn" style="display:none;margin-right:auto" onclick="deleteCategory()">Видалити</button>
+        <button class="btn-ghost" onclick="closeModal('catModalBg')">Скасувати</button>
+        <button class="btn-primary" onclick="saveCategory()">Зберегти</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="db.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────
+let categories = [], dishes = [];
+let activeCatId  = null;
+let statusFilter = 'all';
+
+// ── DELETE helper (відсутній в db.js, але Worker його підтримує) ─
+async function api_delete(table, id) {
+  const res = await fetch(`${API_URL}/${table}?id=eq.${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error(`[api_delete ${table}] HTTP ${res.status}: ${await res.text()}`);
+}
+
+// ── Load ───────────────────────────────────────────────────────
+async function loadAll() {
+  try {
+    [categories, dishes] = await Promise.all([
+      api_get('menu_categories', 'order=sort_order.asc,name.asc'),
+      api_get('menu_dishes',     'order=sort_order.asc,name.asc'),
+    ]);
+    if (typeof db_clearMenuCache === 'function') db_clearMenuCache();
+    renderCats();
+    applyFilter();
+    document.getElementById('pageSub').textContent =
+      `${dishes.length} страв · ${categories.length} категорій`;
+  } catch(err) {
+    showToast('⚠️ ' + err.message);
+    document.getElementById('dishesGrid').innerHTML =
+      `<div class="empty-state dishes-empty"><div class="empty-icon">⚠️</div>${err.message}</div>`;
+  }
+}
+
+// ── Categories sidebar ─────────────────────────────────────────
+function renderCats() {
+  const countMap = {};
+  dishes.forEach(d => { countMap[d.category_id] = (countMap[d.category_id] || 0) + 1; });
+
+  let html = `<div class="cat-item ${activeCatId === null ? 'active' : ''}" onclick="selectCat(null)">
+    <span>🍽</span><span class="cat-item-name">Всі страви</span>
+    <span class="cat-item-count">${dishes.length}</span>
+  </div>`;
+
+  categories.forEach(c => {
+    const safe = escAttr(JSON.stringify(c));
+    html += `<div class="cat-item ${activeCatId === c.id ? 'active' : ''}" onclick="selectCat('${c.id}')">
+      <span>${c.icon || '🍴'}</span>
+      <span class="cat-item-name">${escHtml(c.name)}</span>
+      <span class="cat-item-count">${countMap[c.id] || 0}</span>
+      <span class="cat-item-edit" onclick="event.stopPropagation();openCatModal('${safe}')">✏️</span>
+    </div>`;
+  });
+
+  document.getElementById('catList').innerHTML = html;
+}
+
+function selectCat(id) {
+  activeCatId = id;
+  document.getElementById('dishesTitle').textContent =
+    id === null ? 'Всі страви' : (categories.find(c => c.id === id)?.name || 'Страви');
+  renderCats();
+  applyFilter();
+}
+
+function setStatusFilter(btn) {
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  statusFilter = btn.dataset.f;
+  applyFilter();
+}
+
+// ── Dishes grid ────────────────────────────────────────────────
+function applyFilter() {
+  const q = (document.getElementById('searchInput').value || '').toLowerCase();
+  let list = dishes;
+  if (activeCatId !== null) list = list.filter(d => d.category_id === activeCatId);
+  if (statusFilter === 'active') list = list.filter(d => d.is_active !== false);
+  if (statusFilter === 'hidden') list = list.filter(d => d.is_active === false);
+  if (q) list = list.filter(d => (d.name || '').toLowerCase().includes(q));
+  renderDishes(list);
+}
+
+function renderDishes(list) {
+  const grid = document.getElementById('dishesGrid');
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state dishes-empty"><div class="empty-icon">🍽</div>Страв не знайдено</div>`;
+    return;
+  }
+  grid.innerHTML = list.map(d => {
+    const cat    = categories.find(c => c.id === d.category_id);
+    const active = d.is_active !== false;
+    const imgEl  = d.image_url
+      ? `<div class="dish-img"><img src="${escHtml(d.image_url)}" alt="${escHtml(d.name)}" loading="lazy" onerror="this.parentElement.innerHTML='🍽'"></div>`
+      : `<div class="dish-img">🍽</div>`;
+    const safe = escAttr(JSON.stringify(d));
+    return `<div class="dish-card ${active ? '' : 'inactive'}" onclick="openDishModal('${safe}')">
+      <div class="dish-edit-badge">✏️ Редагувати</div>
+      ${imgEl}
+      <div class="dish-body">
+        <div class="dish-name">${escHtml(d.name)}</div>
+        <div class="dish-desc">${escHtml(d.description || '')}</div>
+        ${d.weight ? `<div class="dish-meta">⚖️ ${escHtml(d.weight)}</div>` : ''}
+        <div class="dish-footer">
+          <div class="dish-price">${fmtPrice(d.price)}</div>
+          <div class="dish-badges">
+            ${cat ? `<span class="badge badge-cat">${escHtml((cat.icon||'') + ' ' + cat.name)}</span>` : ''}
+            <span class="badge ${active ? 'badge-active' : 'badge-hidden'}">${active ? 'Активна' : 'Прихована'}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  return String(s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+}
+function fmtPrice(n) {
+  return (n == null) ? '—' : Number(n).toLocaleString('uk-UA') + ' ₴';
+}
+
+// ── Image preview ──────────────────────────────────────────────
+function previewImg() {
+  const url = document.getElementById('dishImage').value.trim();
+  const box = document.getElementById('imgPreview');
+  if (!url) { box.innerHTML = '<div class="img-preview-ph">🖼 Вставте URL — побачите прев\'ю</div>'; return; }
+  box.innerHTML = `<img src="${escHtml(url)}" style="width:100%;height:100%;object-fit:cover"
+    onerror="this.parentElement.innerHTML='<div class=img-preview-ph>❌ Не вдалось завантажити</div>'">`;
+}
+
+// ── Dish Modal ─────────────────────────────────────────────────
+function openDishModal(dishOrJson) {
+  const d = dishOrJson ? (typeof dishOrJson === 'string' ? JSON.parse(dishOrJson) : dishOrJson) : null;
+  const isEdit = !!d;
+
+  document.getElementById('dishModalTitle').textContent = isEdit ? 'Редагувати страву' : 'Нова страва';
+  document.getElementById('dishId').value           = d?.id          || '';
+  document.getElementById('dishName').value          = d?.name        || '';
+  document.getElementById('dishDesc').value          = d?.description || '';
+  document.getElementById('dishComposition').value   = d?.composition || '';
+  document.getElementById('dishPrice').value         = d?.price       ?? '';
+  document.getElementById('dishWeight').value        = d?.weight      || '';
+  document.getElementById('dishImage').value         = d?.image_url   || '';
+  document.getElementById('dishSort').value          = d?.sort_order  ?? '';
+  document.getElementById('dishActive').checked      = d ? d.is_active !== false : true;
+  document.getElementById('dishDeleteBtn').style.display = isEdit ? '' : 'none';
+
+  const sel = document.getElementById('dishCategory');
+  sel.innerHTML = categories.length
+    ? categories.map(c => `<option value="${c.id}" ${d?.category_id === c.id ? 'selected' : ''}>${escHtml((c.icon||'') + ' ' + c.name)}</option>`).join('')
+    : '<option value="">— спочатку додайте категорію —</option>';
+
+  previewImg();
+  openModal('dishModalBg');
+}
+
+async function saveDish() {
+  const id    = document.getElementById('dishId').value;
+  const name  = document.getElementById('dishName').value.trim();
+  const price = parseInt(document.getElementById('dishPrice').value, 10);
+  const catId = document.getElementById('dishCategory').value;
+
+  if (!name)        { showToast('⚠️ Введіть назву страви'); return; }
+  if (isNaN(price)) { showToast('⚠️ Введіть ціну'); return; }
+  if (!catId)       { showToast('⚠️ Оберіть категорію'); return; }
+
+  const body = {
+    name,
+    description:  document.getElementById('dishDesc').value.trim()        || null,
+    composition:  document.getElementById('dishComposition').value.trim() || null,
+    price,
+    weight:       document.getElementById('dishWeight').value.trim()      || null,
+    category_id:  catId,
+    image_url:    document.getElementById('dishImage').value.trim()       || null,
+    sort_order:   parseInt(document.getElementById('dishSort').value)     || 0,
+    is_active:    document.getElementById('dishActive').checked,
+  };
+
+  try {
+    if (id) {
+      await api_update('menu_dishes', id, body);
+      showToast('✅ Страву оновлено');
+    } else {
+      body.id = 'dish_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+      await api_insert('menu_dishes', body);
+      showToast('✅ Страву додано');
+    }
+    closeModal('dishModalBg');
+    await loadAll();
+  } catch(err) {
+    showToast('⚠️ ' + err.message);
+  }
+}
+
+async function deleteDish() {
+  const id   = document.getElementById('dishId').value;
+  const name = document.getElementById('dishName').value;
+  if (!id || !confirm(`Видалити "${name}"? Це незворотно.`)) return;
+  try {
+    await api_delete('menu_dishes', id);
+    showToast('🗑 Страву видалено');
+    closeModal('dishModalBg');
+    await loadAll();
+  } catch(err) {
+    showToast('⚠️ ' + err.message);
+  }
+}
+
+// ── Category Modal ─────────────────────────────────────────────
+function openCatModal(catOrJson) {
+  const c = catOrJson ? (typeof catOrJson === 'string' ? JSON.parse(catOrJson) : catOrJson) : null;
+  const isEdit = !!c;
+  document.getElementById('catModalTitle').textContent = isEdit ? 'Редагувати категорію' : 'Нова категорія';
+  document.getElementById('catId').value   = c?.id         || '';
+  document.getElementById('catName').value = c?.name       || '';
+  document.getElementById('catIcon').value = c?.icon       || '';
+  document.getElementById('catSort').value = c?.sort_order ?? '';
+  document.getElementById('catDeleteBtn').style.display = isEdit ? '' : 'none';
+  openModal('catModalBg');
+}
+
+async function saveCategory() {
+  const id   = document.getElementById('catId').value;
+  const name = document.getElementById('catName').value.trim();
+  if (!name) { showToast('⚠️ Введіть назву категорії'); return; }
+
+  const body = {
+    name,
+    icon:       document.getElementById('catIcon').value.trim() || null,
+    sort_order: parseInt(document.getElementById('catSort').value) || 0,
+  };
+
+  try {
+    if (id) {
+      await api_update('menu_categories', id, body);
+      showToast('✅ Категорію оновлено');
+    } else {
+      body.id = 'cat_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+      await api_insert('menu_categories', body);
+      showToast('✅ Категорію додано');
+    }
+    closeModal('catModalBg');
+    await loadAll();
+  } catch(err) {
+    showToast('⚠️ ' + err.message);
+  }
+}
+
+async function deleteCategory() {
+  const id   = document.getElementById('catId').value;
+  const name = document.getElementById('catName').value;
+  if (!id) return;
+  const cnt = dishes.filter(d => d.category_id === id).length;
+  const msg  = cnt > 0
+    ? `У категорії "${name}" є ${cnt} страв. Видалити все одно?`
+    : `Видалити категорію "${name}"?`;
+  if (!confirm(msg)) return;
+  try {
+    await api_delete('menu_categories', id);
+    showToast('🗑 Категорію видалено');
+    closeModal('catModalBg');
+    activeCatId = null;
+    await loadAll();
+  } catch(err) {
+    showToast('⚠️ ' + err.message);
+  }
+}
+
+// ── Modal helpers ──────────────────────────────────────────────
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function bgClose(id, e) { if (e.target === document.getElementById(id)) closeModal(id); }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal('dishModalBg'); closeModal('catModalBg'); }
+});
+
+// ── Init ──────────────────────────────────────────────────────
+loadAll();
+</script>
+</body>
+</html>

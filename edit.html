@@ -97,6 +97,15 @@ body { overflow: hidden; }
 .srb.sel-pending   { background: rgba(245,200,66,.1);  border-color: var(--yellow); color: var(--yellow); }
 .srb.sel-cancelled { background: rgba(232,57,42,.1);   border-color: var(--red);    color: var(--red); }
 
+/* Restaurant picker */
+.rest-btn {
+  flex: 1; background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: var(--radius); padding: 9px 12px; font-size: 12px; font-weight: 700;
+  color: var(--text-dim); cursor: pointer; transition: all .18s; text-align: center;
+}
+.rest-btn:hover { border-color: var(--border2); color: var(--text); }
+.rest-btn.active { background: rgba(232,87,42,.1); border-color: var(--accent); color: var(--accent); }
+
 .hall-btn {
   flex: 1; background: var(--surface2); border: 1.5px solid var(--border);
   border-radius: var(--radius); padding: 8px 10px; font-size: 12px; font-weight: 700;
@@ -224,12 +233,15 @@ body { overflow: hidden; }
         <input class="form-input" type="time" id="f-time" oninput="markDirty()">
       </div>
       <div class="form-group">
-        <label>Зал</label>
-        <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
-          <button type="button" class="hall-btn" id="hall-white"   onclick="pickHall('white')">🤍 Білий зал</button>
-          <button type="button" class="hall-btn" id="hall-blue"    onclick="pickHall('blue')">💙 Синій зал</button>
-          <button type="button" class="hall-btn" id="hall-emerald" onclick="pickHall('emerald')">💚 Смарагдовий</button>
+        <label>Ресторан</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button type="button" class="rest-btn" id="rest-main" onclick="pickRestaurant('main')">🏛️ Головний</button>
+          <button type="button" class="rest-btn" id="rest-dalnyk" onclick="pickRestaurant('dalnyk')">🌿 Дальник</button>
         </div>
+      </div>
+      <div class="form-group">
+        <label>Зал</label>
+        <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap" id="hallButtons"></div>
       </div>
       <div class="form-group">
         <label for="f-guests">Гостей</label>
@@ -369,11 +381,41 @@ let _isDirty    = false;
 let _lastSaved  = null;
 let _origBanquet = null;
 
-const HALLS = {
-  white:   '🤍 Білий зал',
-  blue:    '💙 Синій зал',
-  emerald: '💚 Смарагдовий зал',
+const HALLS_BY_REST = {
+  main:   { white: '🤍 Білий зал', blue: '💙 Синій зал', emerald: '💚 Смарагдовий' },
+  dalnyk: { terrace: '☀️ Тераса', big: '🏟️ Великий зал', cafe: '☕ Кафе' },
 };
+let selectedRestaurant = 'main';
+
+function getHallLabel(restaurant, hall) {
+  return (HALLS_BY_REST[restaurant] || {})[hall] || hall;
+}
+
+function pickRestaurant(rest, dirty = true) {
+  selectedRestaurant = rest;
+  document.querySelectorAll('.rest-btn').forEach(b => b.classList.toggle('active', b.id === 'rest-'+rest));
+  const halls = HALLS_BY_REST[rest];
+  const firstHall = Object.keys(halls)[0];
+  renderHallButtons(rest, firstHall);
+  if (dirty) markDirty();
+}
+
+function renderHallButtons(rest, activeHall) {
+  const halls = HALLS_BY_REST[rest];
+  const container = document.getElementById('hallButtons');
+  container.innerHTML = Object.entries(halls).map(([key, label]) =>
+    `<button type="button" class="hall-btn ${key === activeHall ? 'active' : ''}" id="hall-${key}" onclick="pickHall('${key}')">${label}</button>`
+  ).join('');
+  selectedHall = activeHall;
+}
+
+function pickHall(hall, dirty = true) {
+  selectedHall = hall;
+  document.querySelectorAll('.hall-btn').forEach(b =>
+    b.classList.toggle('active', b.id === 'hall-'+hall)
+  );
+  if (dirty) markDirty();
+}
 
 /* ── DIRTY GUARD ── */
 function markDirty() {
@@ -431,9 +473,15 @@ async function init() {
     document.getElementById('f-deposit').value = b.deposit     || '';
     document.getElementById('f-comment').value = b.comment     || '';
 
-    // Hall
-    selectedHall = b.hall || 'white';
-    pickHall(selectedHall, false); // false = don't markDirty on init
+    // Restaurant + Hall
+    const dalnykHalls = ['terrace', 'big', 'cafe'];
+    const savedRest = b.restaurant || (dalnykHalls.includes(b.hall) ? 'dalnyk' : 'main');
+    selectedRestaurant = savedRest;
+    document.querySelectorAll('.rest-btn').forEach(btn =>
+      btn.classList.toggle('active', btn.id === 'rest-' + savedRest)
+    );
+    const savedHall = b.hall || Object.keys(HALLS_BY_REST[savedRest])[0];
+    renderHallButtons(savedRest, savedHall);
 
     // Status — map legacy 'pending' to 'confirmed'
     selectedStatus = (b.status === 'cancelled') ? 'cancelled' : 'confirmed';
@@ -713,8 +761,10 @@ async function handleSubmit() {
   const phone   = document.getElementById('f-phone').value.trim();
   const date    = document.getElementById('f-date').value;
   const time    = document.getElementById('f-time').value || '';
+  const restaurant = selectedRestaurant;
+  const restaurantLabel = restaurant === 'main' ? '🏛️ Головний' : '🌿 Дальник';
   const hall    = selectedHall;
-  const hallLabel = HALLS[hall] || hall;
+  const hallLabel = getHallLabel(restaurant, hall);
   const guests  = parseInt(document.getElementById('f-guests').value);
   const deposit = parseInt(document.getElementById('f-deposit').value);
   const comment = document.getElementById('f-comment').value.trim();
@@ -729,7 +779,7 @@ async function handleSubmit() {
 
     await db_updateBanquet(BID, {
       clientId: client.id, clientName: name, clientPhone: phone,
-      date, time, hall, hallLabel,
+      date, time, restaurant, restaurantLabel, hall, hallLabel,
       guests, deposit, comment,
       status: selectedStatus,
       modifier, modLabel, totalBase: base, totalFinal: final,
@@ -738,12 +788,13 @@ async function handleSubmit() {
 
     _isDirty = false;
     document.getElementById('unsavedBar').classList.remove('show');
-    _lastSaved = { name, phone, date, time, hallLabel, guests, deposit, final, base, modLabel, modifier, sel };
+    _lastSaved = { name, phone, date, time, restaurantLabel, hallLabel, guests, deposit, final, base, modLabel, modifier, sel };
 
     document.getElementById('modalSub').textContent = `Банкет "${name}" успішно оновлено`;
     document.getElementById('modalSummary').innerHTML = `
       <b>Клієнт:</b> ${name}<br><b>Телефон:</b> ${phone}<br>
       <b>Дата:</b> ${fmtDate(date)}${time ? ` о ${time}` : ''}<br>
+      <b>Ресторан:</b> ${restaurantLabel}<br>
       <b>Зал:</b> ${hallLabel}<br>
       <b>Статус:</b> ${{confirmed:'✅ Підтверджено',pending:'⏳ Очікує',cancelled:'❌ Скасовано'}[selectedStatus]||selectedStatus}<br>
       <b>Гостей:</b> ${guests}<br><b>Залог:</b> ${fmt(deposit)}<br>
@@ -775,7 +826,8 @@ function copyBanquetData() {
     `👤 ${s.name}`,
     `📞 ${s.phone}`,
     `📅 ${dateStr}${s.time ? ` о ${s.time}` : ''}`,
-    `🏛️ ${s.hallLabel}`,
+    `🏛️ Ресторан: ${s.restaurantLabel}`,
+    `🚪 Зал: ${s.hallLabel}`,
     `👥 Гостей: ${s.guests}`,
     ``,
     `🍽️ Страви:`,

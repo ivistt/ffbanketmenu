@@ -156,6 +156,15 @@ body { overflow: hidden; }
 .btn-submit:hover { background: var(--accent2); transform: translateY(-1px); }
 .btn-submit:disabled { opacity: .6; transform: none; cursor: not-allowed; }
 
+/* Restaurant picker */
+.rest-btn {
+  flex: 1; background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: var(--radius); padding: 9px 12px; font-size: 12px; font-weight: 700;
+  color: var(--text-dim); cursor: pointer; transition: all .18s; text-align: center;
+}
+.rest-btn:hover { border-color: var(--border2); color: var(--text); }
+.rest-btn.active { background: rgba(232,87,42,.1); border-color: var(--accent); color: var(--accent); }
+
 /* Hall picker */
 .hall-btn {
   flex: 1; background: var(--surface2); border: 1.5px solid var(--border);
@@ -312,12 +321,15 @@ body { overflow: hidden; }
         <input class="form-input" type="time" id="f-time">
       </div>
       <div class="form-group">
-        <label>Зал</label>
-        <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
-          <button type="button" class="hall-btn active" id="hall-white" onclick="pickHall('white')">🤍 Білий зал</button>
-          <button type="button" class="hall-btn" id="hall-blue" onclick="pickHall('blue')">💙 Синій зал</button>
-          <button type="button" class="hall-btn" id="hall-emerald" onclick="pickHall('emerald')">💚 Смарагдовий</button>
+        <label>Ресторан</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button type="button" class="rest-btn active" id="rest-main" onclick="pickRestaurant('main')">🏛️ Головний</button>
+          <button type="button" class="rest-btn" id="rest-dalnyk" onclick="pickRestaurant('dalnyk')">🌿 Дальник</button>
         </div>
+      </div>
+      <div class="form-group">
+        <label>Зал</label>
+        <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap" id="hallButtons"></div>
       </div>
       <div class="form-group">
         <label for="f-guests">Гостей</label>
@@ -527,20 +539,46 @@ function jumpCat(id,tab) {
   }
 }
 
-/* ── HALL ── */
-const HALLS = {
-  white:   '🤍 Білий зал',
-  blue:    '💙 Синій зал',
-  emerald: '💚 Смарагдовий зал',
+/* ── RESTAURANT & HALL ── */
+const HALLS_BY_REST = {
+  main:   { white: '🤍 Білий зал', blue: '💙 Синій зал', emerald: '💚 Смарагдовий' },
+  dalnyk: { terrace: '☀️ Тераса', big: '🏟️ Великий зал', cafe: '☕ Кафе' },
 };
-function pickHall(hall) {
-  selectedHall = hall;
-  ['white','blue','emerald'].forEach(h => {
-    const btn = document.getElementById('hall-'+h);
-    if(btn) btn.classList.toggle('active', h === hall);
-  });
+let selectedRestaurant = 'main';
+
+function getHallLabel(restaurant, hall) {
+  return (HALLS_BY_REST[restaurant] || {})[hall] || hall;
+}
+
+function pickRestaurant(rest) {
+  selectedRestaurant = rest;
+  document.querySelectorAll('.rest-btn').forEach(b => b.classList.toggle('active', b.id === 'rest-'+rest));
+  // Set default hall for restaurant and re-render buttons
+  const halls = HALLS_BY_REST[rest];
+  const firstHall = Object.keys(halls)[0];
+  renderHallButtons(rest, firstHall);
   markDirty();
 }
+
+function renderHallButtons(rest, activeHall) {
+  const halls = HALLS_BY_REST[rest];
+  const container = document.getElementById('hallButtons');
+  container.innerHTML = Object.entries(halls).map(([key, label]) =>
+    `<button type="button" class="hall-btn ${key === activeHall ? 'active' : ''}" id="hall-${key}" onclick="pickHall('${key}')">${label}</button>`
+  ).join('');
+  selectedHall = activeHall;
+}
+
+function pickHall(hall) {
+  selectedHall = hall;
+  document.querySelectorAll('.hall-btn').forEach(b =>
+    b.classList.toggle('active', b.id === 'hall-'+hall)
+  );
+  markDirty();
+}
+
+// Init hall buttons on page load
+renderHallButtons('main', 'white');
 
 /* ── QTY & TOTALS ── */
 function chgQty(id,delta) {
@@ -661,8 +699,10 @@ async function handleSubmit() {
   const phone=document.getElementById('f-phone').value.trim();
   const date=document.getElementById('f-date').value;
   const time=document.getElementById('f-time').value || '';
+  const restaurant=selectedRestaurant;
+  const restaurantLabel=restaurant==='main'?'🏛️ Головний':'🌿 Дальник';
   const hall=selectedHall;
-  const hallLabel=HALLS[hall] || hall;
+  const hallLabel=getHallLabel(restaurant, hall);
   const guests=parseInt(document.getElementById('f-guests').value);
   const deposit=parseInt(document.getElementById('f-deposit').value);
   const comment=document.getElementById('f-comment').value.trim();
@@ -674,7 +714,7 @@ async function handleSubmit() {
     const prevCount = (await db_getClientBanquets(client.id)).length;
     const banquet  = await db_addBanquet({
       clientId:client.id, clientName:name, clientPhone:phone,
-      date, time, hall, hallLabel,
+      date, time, restaurant, restaurantLabel, hall, hallLabel,
       guests, deposit, comment,
       modifier, modLabel, totalBase:base, totalFinal:final,
       status:'confirmed',
@@ -682,7 +722,7 @@ async function handleSubmit() {
     });
 
     _isDirty = false; // скидаємо після успішного збереження
-    _lastBanquet = { name, phone, date, time, hallLabel, guests, deposit, final, base, modLabel, modifier, sel };
+    _lastBanquet = { name, phone, date, time, restaurantLabel, hallLabel, guests, deposit, final, base, modLabel, modifier, sel };
 
     document.getElementById('modalSub').textContent = prevCount===0
       ? `Новий клієнт "${name}" доданий до бази`
@@ -691,6 +731,7 @@ async function handleSubmit() {
     document.getElementById('modalSummary').innerHTML = `
       <b>Клієнт:</b> ${name}<br><b>Телефон:</b> ${phone}<br>
       <b>Дата:</b> ${fmtDate(date)}${time?` о ${time}`:''}<br>
+      <b>Ресторан:</b> ${restaurantLabel}<br>
       <b>Зал:</b> ${hallLabel}<br><b>Гостей:</b> ${guests}<br>
       <b>Залог:</b> ${fmt(deposit)}<br><b>Обслуговування:</b> ${modLabel}<br>
       ${comment?`<b>Коментар:</b> ${comment}<br>`:''}
@@ -712,7 +753,10 @@ function goNew() {
   ['f-name','f-phone','f-date','f-time','f-guests','f-deposit','f-comment'].forEach(id=>{document.getElementById(id).value='';document.getElementById(id).classList.remove('err');});
   document.querySelectorAll('.ferr').forEach(e=>e.classList.remove('show'));
   document.getElementById('clientHint').classList.remove('show');
-  selectedHall='white'; pickHall('white');
+  selectedRestaurant='main'; selectedHall='white';
+  renderHallButtons('main','white');
+  document.getElementById('rest-main').classList.add('active');
+  document.getElementById('rest-dalnyk').classList.remove('active');
   quantities={};modifier=0;_isDirty=false;_lastBanquet=null;
   document.querySelectorAll('.chip').forEach(c=>c.classList.remove('s-on','d-on'));
   document.querySelectorAll('.qty-v').forEach(el=>el.textContent='0');
@@ -731,7 +775,8 @@ function copyBanquetData() {
     `👤 ${b.name}`,
     `📞 ${b.phone}`,
     `📅 ${dateStr}${timeStr}`,
-    `🏛️ ${b.hallLabel}`,
+    `🏛️ Ресторан: ${b.restaurantLabel}`,
+    `🚪 Зал: ${b.hallLabel}`,
     `👥 Гостей: ${b.guests}`,
     ``,
     `🍽️ Страви:`,

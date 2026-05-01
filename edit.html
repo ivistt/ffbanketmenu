@@ -70,10 +70,21 @@ body { overflow: hidden; }
 
 .totals { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 15px; display: flex; flex-direction: column; gap: 9px; }
 .tot-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-dim); font-weight: 500; }
+.tot-row.strong { font-size: 14px; font-weight: 700; color: var(--text); }
 .tot-row.big { font-size: 17px; font-weight: 800; color: var(--text); font-family: var(--fh); }
 .tot-row.grn { color: var(--green); font-weight: 700; }
 .tot-val { font-weight: 700; color: var(--text); }
 .tot-div { height: 1px; background: var(--border); }
+.tot-note {
+  margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 11px; line-height: 1.6; color: var(--text-muted); white-space: pre-line;
+}
+.tot-note ul {
+  margin: 0; padding-left: 18px; white-space: normal;
+}
+.tot-note li + li {
+  margin-top: 8px;
+}
 
 /* Кнопка зберегти — жовтий акцент щоб відрізнялась від "Оформити" */
 .btn-submit {
@@ -166,12 +177,23 @@ body { overflow: hidden; }
 .mob-totals-wrap { padding: 16px 16px 0; display: flex; flex-direction: column; gap: 7px; }
 .mob-total-row { display: flex; justify-content: space-between; align-items: center; }
 .mob-total-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.mob-total-subval { font-family: var(--fh); font-size: 15px; font-weight: 700; color: var(--text); }
 .mob-total-val { font-family: var(--fh); font-size: 22px; font-weight: 800; color: var(--accent); }
 .mob-total-pp { font-size: 12px; color: var(--green); font-weight: 600; }
 .mob-total-details { display: flex; flex-direction: column; gap: 4px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font-size: 12px; color: var(--text-dim); }
 .mob-total-details .mtr { display: flex; justify-content: space-between; font-weight: 500; }
 .mob-total-details .mtr b { color: var(--text); font-weight: 700; }
 .mob-submit-wrap { padding: 12px 16px 20px; }
+.mob-total-note {
+  font-size: 11px; line-height: 1.6; color: var(--text-muted);
+  white-space: pre-line; padding: 0 16px 16px;
+}
+.mob-total-note ul {
+  margin: 0; padding-left: 18px; white-space: normal;
+}
+.mob-total-note li + li {
+  margin-top: 8px;
+}
 
 /* Unsaved indicator */
 .unsaved-bar {
@@ -235,8 +257,8 @@ body { overflow: hidden; }
       <div class="form-group">
         <label>Ресторан</label>
         <div style="display:flex;gap:8px;margin-top:4px">
-          <button type="button" class="rest-btn" id="rest-main" onclick="pickRestaurant('main')">🏛️ Головний</button>
-          <button type="button" class="rest-btn" id="rest-dalnyk" onclick="pickRestaurant('dalnyk')">🌿 Дальник</button>
+          <button type="button" class="rest-btn" id="rest-main" onclick="pickRestaurant('main')">🏛️ ОГОНЬ Одесса</button>
+          <button type="button" class="rest-btn" id="rest-dalnyk" onclick="pickRestaurant('dalnyk')">🌿 Огонь Дальник</button>
         </div>
       </div>
       <div class="form-group">
@@ -250,7 +272,7 @@ body { overflow: hidden; }
       </div>
       <div class="form-group">
         <label for="f-deposit">Залог (₴)</label>
-        <input class="form-input" type="number" id="f-deposit" placeholder="5000" min="0" oninput="clearErr('f-deposit','fdep');markDirty()">
+        <input class="form-input" type="number" id="f-deposit" placeholder="5000" min="0" oninput="clearErr('f-deposit','fdep');markDirty();calcTotals()">
         <div class="ferr" id="fdep">Введіть суму залогу</div>
       </div>
       <div class="form-group">
@@ -298,8 +320,10 @@ body { overflow: hidden; }
       <div class="tot-row"><span>Без надбавки:</span><span class="tot-val" id="t-base">0 ₴</span></div>
       <div class="tot-row" id="t-mod-row" style="display:none"><span id="t-mod-lbl"></span><span class="tot-val" id="t-mod-val"></span></div>
       <div class="tot-div"></div>
-      <div class="tot-row big"><span>Підсумок:</span><span id="t-final">0 ₴</span></div>
+      <div class="tot-row strong"><span>Загальна сума:</span><span id="t-final">0 ₴</span></div>
+      <div class="tot-row big"><span>Залишилось:</span><span id="t-with-deposit">0 ₴</span></div>
       <div class="tot-row grn" id="t-pp-row" style="display:none"><span>На людину:</span><span id="t-pp">—</span></div>
+      <div class="tot-note"><ul><li>Мінімальне замовлення по меню від 900 грн. з людини.</li><li>Обслуговування +10% офіціантам.</li><li>Розрахунок тільки готівкою.</li><li>Бокси для упакування їжі є в наявності — 8 грн. шт. (Обов'язкове замовлення напою нашого виробництва на вибір: компот/лимонад/узвар).</li><li>Конфетті гостей (400 грн. прибирання).</li><li>Ресторан працює кожен день з 10:00 до 22:00 (О 21:30 офіціанти починають збирати банкети).</li><li>Жива музика з 17:30 до 20:30.</li><li>Продовження музики: 1 година 1000 грн.</li></ul></div>
     </div>
 
     <button class="btn-submit" id="submitBtn" onclick="handleSubmit()">💾 Зберегти зміни</button>
@@ -313,7 +337,11 @@ body { overflow: hidden; }
           <div class="mob-total-label">Загальна сума</div>
           <div class="mob-total-pp" id="mob-pp" style="display:none"></div>
         </div>
-        <div class="mob-total-val" id="mob-total">0 ₴</div>
+        <div class="mob-total-subval" id="mob-total">0 ₴</div>
+      </div>
+      <div class="mob-total-row">
+        <div class="mob-total-label">Залишилось</div>
+        <div class="mob-total-val" id="mob-total-with-deposit">0 ₴</div>
       </div>
       <div class="mob-total-details" id="mob-details-wrap" style="display:none">
         <div class="mtr"><span>Страв:</span><b id="mob-count">0</b></div>
@@ -321,6 +349,7 @@ body { overflow: hidden; }
         <div class="mtr" id="mob-mod-row" style="display:none"><span id="mob-mod-lbl"></span><b id="mob-mod-val"></b></div>
       </div>
     </div>
+    <div class="mob-total-note"><ul><li>Мінімальне замовлення по меню від 900 грн. з людини.</li><li>Обслуговування +10% офіціантам.</li><li>Розрахунок тільки готівкою.</li><li>Бокси для упакування їжі є в наявності — 8 грн. шт. (Обов'язкове замовлення напою нашого виробництва на вибір: компот/лимонад/узвар).</li><li>Конфетті гостей (400 грн. прибирання).</li><li>Ресторан працює кожен день з 10:00 до 22:00 (О 21:30 офіціанти починають збирати банкети).</li><li>Жива музика з 17:30 до 20:30.</li><li>Продовження музики: 1 година 1000 грн.</li></ul></div>
     <div class="mob-submit-wrap">
       <button class="btn-submit" id="submitBtnMob" onclick="handleSubmit()">💾 Зберегти зміни</button>
     </div>
@@ -354,10 +383,16 @@ body { overflow: hidden; }
     <div class="modal-title">Зміни збережено!</div>
     <div class="modal-sub" id="modalSub"></div>
     <div class="modal-summary" id="modalSummary"></div>
-    <button class="modal-btn" onclick="copyBanquetData()" id="copyBtn"
-      style="width:100%;margin-bottom:10px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text);font-family:var(--fb);font-size:13px;font-weight:700;padding:13px;border-radius:var(--radius);cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:8px">
-      📋 Скопіювати дані банкету
-    </button>
+    <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="modal-btn" onclick="copyBanquetData()" id="copyBtn"
+        style="flex:1;min-width:220px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text);font-family:var(--fb);font-size:13px;font-weight:700;padding:13px;border-radius:var(--radius);cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:8px">
+        📋 Скопіювати дані банкету
+      </button>
+      <button class="modal-btn" onclick="copyKitchenData()" id="copyKitchenBtn"
+        style="flex:1;min-width:220px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text);font-family:var(--fb);font-size:13px;font-weight:700;padding:13px;border-radius:var(--radius);cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:8px">
+        🍽️ Скопіювати на кухню
+      </button>
+    </div>
     <div class="modal-btns">
       <button class="modal-btn sec" id="btnBackToBanquet" onclick="goBack()">← До банкету</button>
       <button class="modal-btn pri" onclick="location.href='banquets.html'">Всі банкети →</button>
@@ -641,11 +676,14 @@ function calcTotals() {
   const modAmt = Math.round(base * modifier / 100);
   const final  = base + modAmt;
   const guests = parseInt(document.getElementById('f-guests').value) || 0;
+  const deposit = parseInt(document.getElementById('f-deposit').value) || 0;
+  const withDeposit = Math.max(final - deposit, 0);
 
   // Desktop left panel
   document.getElementById('t-count').textContent = count;
   document.getElementById('t-base').textContent  = fmt(base);
   document.getElementById('t-final').textContent = fmt(final);
+  document.getElementById('t-with-deposit').textContent = fmt(withDeposit);
   const mr = document.getElementById('t-mod-row');
   if (modifier !== 0) {
     mr.style.display = 'flex';
@@ -660,9 +698,11 @@ function calcTotals() {
 
   // Mobile bar
   const mobTotal       = document.getElementById('mob-total');
+  const mobTotalWithDeposit = document.getElementById('mob-total-with-deposit');
   const mobPp          = document.getElementById('mob-pp');
   const mobDetailsWrap = document.getElementById('mob-details-wrap');
   if (mobTotal) mobTotal.textContent = fmt(final);
+  if (mobTotalWithDeposit) mobTotalWithDeposit.textContent = fmt(withDeposit);
   if (mobPp) {
     if (guests > 0 && base > 0) { mobPp.textContent = `${fmt(Math.round(base / guests))} / особу`; mobPp.style.display = 'block'; }
     else mobPp.style.display = 'none';
@@ -762,7 +802,7 @@ async function handleSubmit() {
   const date    = document.getElementById('f-date').value;
   const time    = document.getElementById('f-time').value || '';
   const restaurant = selectedRestaurant;
-  const restaurantLabel = restaurant === 'main' ? '🏛️ Головний' : '🌿 Дальник';
+  const restaurantLabel = restaurant === 'main' ? '🏛️ ОГОНЬ Одесса' : '🌿 Огонь Дальник';
   const hall    = selectedHall;
   const hallLabel = getHallLabel(restaurant, hall);
   const guests  = parseInt(document.getElementById('f-guests').value);
@@ -801,7 +841,8 @@ async function handleSubmit() {
       <b>Обслуговування:</b> ${modLabel}<br>
       ${comment ? `<b>Коментар:</b> ${comment}<br>` : ''}
       <br><b>Страви:</b><br>${sel.map(d => `<b>${d.name}</b> ×${d.qty} — ${fmt(d.price*d.qty)}`).join('<br>')}<br><br>
-      <b>Сума без надбавки:</b> ${fmt(base)}<br><b>Підсумок:</b> ${fmt(final)}<br>
+      <b>Сума без надбавки:</b> ${fmt(base)}<br><b>Загальна сума:</b> ${fmt(final)}<br>
+      <b>Залишилось:</b> ${fmt(Math.max(final-deposit,0))}<br>
       <b>На людину:</b> ${guests ? fmt(Math.round(base / guests)) : '—'}`;
 
     document.getElementById('modalOverlay').classList.add('vis');
@@ -837,17 +878,43 @@ function copyBanquetData() {
   ];
   if (s.modifier !== 0) lines.push(`📊 Обслуговування: ${s.modLabel}`);
   lines.push(`💵 Загальна сума: ${s.final} ₴`);
+  lines.push(`💳 Залишилось: ${Math.max(s.final - s.deposit, 0)} ₴`);
 
-  const text = lines.join('\n');
-  const btn  = document.getElementById('copyBtn');
+  copyTextWithFeedback(lines.join('\n'), 'copyBtn', '📋 Скопіювати дані банкету');
+}
 
+function copyKitchenData() {
+  if (!_lastSaved) return;
+  const s = _lastSaved;
+  const dateStr = s.date ? s.date.split('-').reverse().join('.') : '—';
+  const lines = [
+    `👤 ${s.name}`,
+    `📞 ${s.phone}`,
+    `📅 ${dateStr}${s.time ? ` о ${s.time}` : ''}`,
+    `🏛️ Ресторан: ${s.restaurantLabel}`,
+    `🚪 Зал: ${s.hallLabel}`,
+    `👥 Гостей: ${s.guests}`,
+    ``,
+    `🍽️ Страви:`,
+    ...s.sel.map(d => `   ${d.name} ×${d.qty}`),
+  ];
+
+  copyTextWithFeedback(lines.join('\n'), 'copyKitchenBtn', '🍽️ Скопіювати на кухню');
+}
+
+function copyTextWithFeedback(text, btnId, idleText) {
+  const btn = document.getElementById(btnId);
+  const resetStyles = () => {
+    btn.innerHTML = idleText;
+    btn.style.borderColor = 'var(--border)';
+    btn.style.color = 'var(--text)';
+  };
   const success = () => {
     btn.textContent = '✅ Скопійовано!';
     btn.style.borderColor = 'var(--green)';
     btn.style.color = 'var(--green)';
     setTimeout(() => {
-      btn.innerHTML = '📋 Скопіювати дані банкету';
-      btn.style.borderColor = ''; btn.style.color = '';
+      resetStyles();
     }, 2000);
   };
 

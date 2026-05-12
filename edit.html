@@ -422,7 +422,8 @@ const HALLS_BY_REST = {
     blue: '💙 Синій зал',
     emerald: '💚 Смарагдовий',
     terrace_bar: '🍸 Тересса бар',
-    gazebos: '🌿 Летние беседки'
+    gazebos: '🌿 Летние беседки',
+    big_terrace: '☀️ Терасса большая'
   },
   dalnyk: { terrace: '☀️ Тераса', big: '🏟️ Великий зал', cafe: '☕ Кафе' },
 };
@@ -608,7 +609,7 @@ function renderMenu() {
   Object.entries(quantities).forEach(([id, qty]) => {
     const qv = document.getElementById('qv-' + id);
     const dc = document.getElementById('dc-' + id);
-    if (qv) qv.textContent = qty;
+    if (qv) qv.textContent = fmtQty(qty);
     if (dc && qty > 0) dc.classList.add('sel');
   });
 }
@@ -627,9 +628,9 @@ function dCard(d) {
       <div class="dish-meta"><div class="dish-price">${d.price} ₴</div><div class="dish-wt">${d.weight || ''}</div></div>
     </div>
     <div class="qty-ctrl">
-      <button class="qty-btn" onclick="chgQty('${d.id}',-1)">−</button>
+      <button class="qty-btn" onclick="chgQty('${d.id}',-0.5)">−</button>
       <div class="qty-v" id="qv-${d.id}">0</div>
-      <button class="qty-btn" onclick="chgQty('${d.id}',+1)">+</button>
+      <button class="qty-btn" onclick="chgQty('${d.id}',0.5)">+</button>
     </div>
   </div>`;
 }
@@ -648,19 +649,18 @@ function jumpCat(id, tab) {
 /* ── HALL ── */
 function pickHall(hall, dirty = true) {
   selectedHall = hall;
-  ['white','blue','emerald'].forEach(h => {
-    const btn = document.getElementById('hall-' + h);
-    if (btn) btn.classList.toggle('active', h === hall);
-  });
+  document.querySelectorAll('.hall-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.id === 'hall-' + hall)
+  );
   if (dirty) markDirty();
 }
 
 /* ── QTY & TOTALS ── */
 function chgQty(id, delta) {
-  quantities[id] = Math.max(0, (quantities[id] || 0) + delta);
+  quantities[id] = roundQty(Math.max(0, (quantities[id] || 0) + delta));
   const qv = document.getElementById('qv-' + id);
   const dc = document.getElementById('dc-' + id);
-  if (qv) qv.textContent = quantities[id];
+  if (qv) qv.textContent = fmtQty(quantities[id]);
   if (dc) dc.classList.toggle('sel', quantities[id] > 0);
   markDirty();
   calcTotals();
@@ -686,7 +686,7 @@ function calcTotals() {
   const withDeposit = Math.max(final - deposit, 0);
 
   // Desktop left panel
-  document.getElementById('t-count').textContent = count;
+  document.getElementById('t-count').textContent = fmtQty(count);
   document.getElementById('t-base').textContent  = fmt(base);
   document.getElementById('t-final').textContent = fmt(final);
   document.getElementById('t-with-deposit').textContent = fmt(withDeposit);
@@ -716,7 +716,7 @@ function calcTotals() {
   if (mobDetailsWrap) {
     if (count > 0) {
       mobDetailsWrap.style.display = 'flex';
-      document.getElementById('mob-count').textContent = count;
+      document.getElementById('mob-count').textContent = fmtQty(count);
       document.getElementById('mob-base').textContent  = fmt(base);
       const mobModRow = document.getElementById('mob-mod-row');
       if (modifier !== 0) {
@@ -739,9 +739,9 @@ function calcSummary() {
       <div class="sum-item-name">${d.name}</div>
       <div class="sum-item-price">${d.price} ₴</div>
       <div class="sum-qty-ctrl">
-        <button class="sqb" onclick="chgQty('${d.id}',-1)">−</button>
-        <div class="sqv">${d.qty}</div>
-        <button class="sqb" onclick="chgQty('${d.id}',+1)">+</button>
+        <button class="sqb" onclick="chgQty('${d.id}',-0.5)">−</button>
+        <div class="sqv">${fmtQty(d.qty)}</div>
+        <button class="sqb" onclick="chgQty('${d.id}',0.5)">+</button>
       </div>
     </div>`).join('');
 }
@@ -846,7 +846,7 @@ async function handleSubmit() {
       <b>Гостей:</b> ${guests}<br><b>Залог:</b> ${fmt(deposit)}<br>
       <b>Обслуговування:</b> ${modLabel}<br>
       ${comment ? `<b>Коментар:</b> ${comment}<br>` : ''}
-      <br><b>Страви:</b><br>${sel.map(d => `<b>${d.name}</b> ×${d.qty} — ${fmt(d.price*d.qty)}`).join('<br>')}<br><br>
+      <br><b>Страви:</b><br>${sel.map(d => `<b>${d.name}</b> ×${fmtQty(d.qty)} — ${fmt(d.price*d.qty)}`).join('<br>')}<br><br>
       <b>Сума без надбавки:</b> ${fmt(base)}<br><b>Загальна сума:</b> ${fmt(final)}<br>
       <b>Залишилось:</b> ${fmt(Math.max(final-deposit,0))}<br>
       <b>На людину:</b> ${guests ? fmt(Math.round(base / guests)) : '—'}`;
@@ -878,7 +878,7 @@ function copyBanquetData() {
     `👥 Гостей: ${s.guests}`,
     ``,
     `🍽️ Страви:`,
-    ...s.sel.map(d => `   ${d.name} ×${d.qty} — ${d.price * d.qty} ₴`),
+    ...s.sel.map(d => `   ${d.name} ×${fmtQty(d.qty)} — ${d.price * d.qty} ₴`),
     ``,
     `💰 Залог: ${s.deposit} ₴`,
   ];
@@ -902,7 +902,7 @@ function copyKitchenData() {
     `👥 Гостей: ${s.guests}`,
     ``,
     `🍽️ Страви:`,
-    ...s.sel.map(d => `   ${d.name} ×${d.qty}`),
+    ...s.sel.map(d => `   ${d.name} ×${fmtQty(d.qty)}`),
   ];
 
   copyTextWithFeedback(lines.join('\n'), 'copyKitchenBtn', '🍽️ Скопіювати на кухню');
@@ -940,6 +940,12 @@ function fallbackCopy(text, cb) {
 }
 
 /* ── HELPERS ── */
+function roundQty(q) {
+  return Math.round(q * 2) / 2;
+}
+function fmtQty(q) {
+  return Number.isInteger(q) ? String(q) : q.toFixed(1).replace(/\.0$/, '');
+}
 function findDish(id) {
   for (const c of menuData) for (const d of c.dishes) if (d.id === id) return d;
   return null;

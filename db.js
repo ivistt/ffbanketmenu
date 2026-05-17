@@ -63,6 +63,38 @@ async function api_update(table, id, body) {
   return Array.isArray(data) ? data[0] : data;
 }
 
+async function api_delete(table, id) {
+  const url = `${API_URL}/${table}?id=eq.${encodeURIComponent(id)}`;
+  let res = await fetch(url, {
+    method: 'DELETE',
+    headers: getAuthHeaders({ 'Prefer': 'return=representation' }),
+  });
+
+  // Some worker/proxy setups forward GET/POST/PATCH but reject DELETE.
+  // Retry through POST method override so admin actions still work.
+  if (!res.ok && [405, 501].includes(res.status)) {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: getAuthHeaders({
+        'Prefer': 'return=representation',
+        'X-HTTP-Method-Override': 'DELETE',
+      }),
+    });
+  }
+
+  if (!res.ok) throw new Error(`[api_delete ${table}] HTTP ${res.status}: ${await res.text()}`);
+
+  if (res.status === 204) return null;
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    const data = JSON.parse(text);
+    return Array.isArray(data) ? data[0] : data;
+  } catch {
+    return text;
+  }
+}
+
 /* ── Конвертація snake_case (Supabase) ↔ camelCase (app) ── */
 function banquetFromSB(b) {
   return {

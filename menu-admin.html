@@ -264,15 +264,6 @@ let statusFilter = 'all';
 const _dishMap = new Map();
 const _catMap  = new Map();
 
-// ── DELETE helper (відсутній в db.js, але Worker його підтримує) ─
-async function api_delete(table, id) {
-  const res = await fetch(`${API_URL}/${table}?id=eq.${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) throw new Error(`[api_delete ${table}] HTTP ${res.status}: ${await res.text()}`);
-}
-
 // ── Load ───────────────────────────────────────────────────────
 async function loadAll() {
   try {

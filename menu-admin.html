@@ -264,6 +264,19 @@ let statusFilter = 'all';
 const _dishMap = new Map();
 const _catMap  = new Map();
 
+// Keep delete logic local here as well, so menu admin works even if db.js is cached by the browser/CDN.
+async function api_delete(table, id) {
+  const res = await fetch(`${API_URL}/${table}?id=eq.${encodeURIComponent(id)}`, {
+    method: 'POST',
+    headers: getAuthHeaders({
+      'Prefer': 'return=representation',
+      'X-HTTP-Method-Override': 'DELETE',
+    }),
+  });
+  if (!res.ok) throw new Error(`[api_delete ${table}] HTTP ${res.status}: ${await res.text()}`);
+  return res.status === 204 ? null : res.text();
+}
+
 // ── Load ───────────────────────────────────────────────────────
 async function loadAll() {
   try {

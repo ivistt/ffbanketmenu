@@ -65,22 +65,15 @@ async function api_update(table, id, body) {
 
 async function api_delete(table, id) {
   const url = `${API_URL}/${table}?id=eq.${encodeURIComponent(id)}`;
-  let res = await fetch(url, {
-    method: 'DELETE',
-    headers: getAuthHeaders({ 'Prefer': 'return=representation' }),
+  // Browser CORS preflight on DELETE is blocked by the current worker config,
+  // so send a POST with method override right away.
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: getAuthHeaders({
+      'Prefer': 'return=representation',
+      'X-HTTP-Method-Override': 'DELETE',
+    }),
   });
-
-  // Some worker/proxy setups forward GET/POST/PATCH but reject DELETE.
-  // Retry through POST method override so admin actions still work.
-  if (!res.ok && [405, 501].includes(res.status)) {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: getAuthHeaders({
-        'Prefer': 'return=representation',
-        'X-HTTP-Method-Override': 'DELETE',
-      }),
-    });
-  }
 
   if (!res.ok) throw new Error(`[api_delete ${table}] HTTP ${res.status}: ${await res.text()}`);
 

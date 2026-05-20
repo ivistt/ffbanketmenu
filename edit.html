@@ -357,6 +357,9 @@ body { overflow: hidden; }
 
   <!-- ═══ MIDDLE — меню ═══ -->
   <div class="add-mid">
+    <div style="padding:12px 14px 0;border-bottom:1px solid var(--border);background:rgba(14,14,15,.9);backdrop-filter:blur(12px)">
+      <input class="search-input" id="menuSearchInput" type="text" placeholder="🔍 Пошук страви..." oninput="onMenuSearch()" style="width:100%">
+    </div>
     <div class="cat-nav" id="catNav"></div>
     <div class="menu-scroll" id="menuScroll">
       <div class="menu-content" id="menuContent">
@@ -415,6 +418,7 @@ let selectedStatus = 'pending';
 let _isDirty    = false;
 let _lastSaved  = null;
 let _origBanquet = null;
+let menuSearchQuery = '';
 
 const HALLS_BY_REST = {
   main: {
@@ -594,16 +598,17 @@ async function loadMenu(savedDishes = []) {
 }
 
 function renderMenu() {
-  document.getElementById('catNav').innerHTML = menuData.map((c,i) =>
+  const visibleMenu = getVisibleMenuData();
+  document.getElementById('catNav').innerHTML = visibleMenu.map((c,i) =>
     `<button class="cat-tab ${i===0?'active':''}" onclick="jumpCat('ms-${c.id}',this)">${c.name}</button>`
   ).join('');
 
-  document.getElementById('menuContent').innerHTML = menuData.map(c => `
+  document.getElementById('menuContent').innerHTML = visibleMenu.length ? visibleMenu.map(c => `
     <div class="cat-sec" id="ms-${c.id}">
       <div class="cat-sec-title">${c.name} <em>${c.dishes.length}</em></div>
       <div class="dishes-grid">${c.dishes.map(dCard).join('')}</div>
     </div>`
-  ).join('');
+  ).join('') : `<div class="empty-state"><div class="empty-icon">🔎</div>Страв не знайдено</div>`;
 
   // Apply pre-filled quantities visually
   Object.entries(quantities).forEach(([id, qty]) => {
@@ -612,6 +617,22 @@ function renderMenu() {
     if (qv) qv.textContent = fmtQty(qty);
     if (dc && qty > 0) dc.classList.add('sel');
   });
+}
+
+function getVisibleMenuData() {
+  const q = menuSearchQuery.trim().toLowerCase();
+  if (!q) return menuData;
+  return menuData
+    .map(cat => ({
+      ...cat,
+      dishes: cat.dishes.filter(d => (d.name || '').toLowerCase().includes(q)),
+    }))
+    .filter(cat => cat.dishes.length);
+}
+
+function onMenuSearch() {
+  menuSearchQuery = document.getElementById('menuSearchInput').value || '';
+  renderMenu();
 }
 
 function dCard(d) {
@@ -674,13 +695,13 @@ function calcBase() {
     const d = findDish(id);
     if (d) { base += d.price * qty; count += qty; }
   }
-  return { base, count };
+  return { base: roundMoney(base), count };
 }
 
 function calcTotals() {
   const { base, count } = calcBase();
-  const modAmt = Math.round(base * modifier / 100);
-  const final  = base + modAmt;
+  const modAmt = roundMoney(base * modifier / 100);
+  const final  = roundMoney(base + modAmt);
   const guests = parseInt(document.getElementById('f-guests').value) || 0;
   const deposit = parseInt(document.getElementById('f-deposit').value) || 0;
   const withDeposit = Math.max(final - deposit, 0);
@@ -815,8 +836,8 @@ async function handleSubmit() {
   const deposit = parseInt(document.getElementById('f-deposit').value);
   const comment = document.getElementById('f-comment').value.trim();
   const { base } = calcBase();
-  const modAmt  = Math.round(base * modifier / 100);
-  const final   = base + modAmt;
+  const modAmt  = roundMoney(base * modifier / 100);
+  const final   = roundMoney(base + modAmt);
   const modLabel = modifier > 0 ? `+${modifier}%` : modifier < 0 ? `${modifier}%` : 'без';
 
   try {
@@ -846,7 +867,7 @@ async function handleSubmit() {
       <b>Гостей:</b> ${guests}<br><b>Залог:</b> ${fmt(deposit)}<br>
       <b>Обслуговування:</b> ${modLabel}<br>
       ${comment ? `<b>Коментар:</b> ${comment}<br>` : ''}
-      <br><b>Страви:</b><br>${sel.map(d => `<b>${d.name}</b> ×${fmtQty(d.qty)} — ${fmt(d.price*d.qty)}`).join('<br>')}<br><br>
+      <br><b>Страви:</b><br>${sel.map(d => `<b>${d.name}</b> ×${fmtQty(d.qty)} — ${fmt(d.subtotal)}`).join('<br>')}<br><br>
       <b>Сума без надбавки:</b> ${fmt(base)}<br><b>Загальна сума:</b> ${fmt(final)}<br>
       <b>Залишилось:</b> ${fmt(Math.max(final-deposit,0))}<br>
       <b>На людину:</b> ${guests ? fmt(Math.round(base / guests)) : '—'}`;
@@ -878,7 +899,7 @@ function copyBanquetData() {
     `👥 Гостей: ${s.guests}`,
     ``,
     `🍽️ Страви:`,
-    ...s.sel.map(d => `   ${d.name} ×${fmtQty(d.qty)} — ${d.price * d.qty} ₴`),
+    ...s.sel.map(d => `   ${d.name} ×${fmtQty(d.qty)} — ${roundMoney(d.price * d.qty)} ₴`),
     ``,
     `💰 Залог: ${s.deposit} ₴`,
   ];
@@ -943,6 +964,9 @@ function fallbackCopy(text, cb) {
 function roundQty(q) {
   return Math.round(q * 2) / 2;
 }
+function roundMoney(n) {
+  return Math.round(n);
+}
 function fmtQty(q) {
   return Number.isInteger(q) ? String(q) : q.toFixed(1).replace(/\.0$/, '');
 }
@@ -953,7 +977,7 @@ function findDish(id) {
 function getSel() {
   return Object.entries(quantities)
     .filter(([,q]) => q > 0)
-    .map(([id, qty]) => { const d = findDish(id); return d ? {...d, qty, subtotal: d.price * qty} : null; })
+    .map(([id, qty]) => { const d = findDish(id); return d ? {...d, qty, subtotal: roundMoney(d.price * qty)} : null; })
     .filter(Boolean);
 }
 function clearErr(fid, eid) {

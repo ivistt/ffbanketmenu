@@ -56,6 +56,13 @@
     </div>
   </div>
 
+  <div id="draftsSection" style="display:none;margin-bottom:24px">
+    <div class="section-head" style="margin-bottom:10px">
+      <div class="section-title">Незавершені на пристрої</div>
+    </div>
+    <div class="banquet-list" id="draftsList"></div>
+  </div>
+
   <div class="filter-tabs">
     <button class="filter-tab active" data-f="all"       onclick="setFilter(this)">Всі</button>
     <button class="filter-tab" data-f="confirmed"        onclick="setFilter(this)">✅ Підтверджені</button>
@@ -94,11 +101,12 @@
 db_seed(); renderOfflineBanner();
 
 const PAGE_SIZE = 15;
-let cf = 'all', cp = 1, all = [], filtered = [];
+let cf = 'all', cp = 1, all = [], filtered = [], drafts = [];
 
 async function init() {
   try {
     all = (await db_getBanquets()).sort((a,b)=>new Date(b.date)-new Date(a.date));
+    drafts = db_getLocalDrafts();
     applyFilter();
   } catch(err) {
     document.getElementById('tblBody').innerHTML = `<div class="loader-wrap" style="color:var(--text-muted)">⚠️ Помилка завантаження</div>`;
@@ -126,7 +134,10 @@ function applyFilter() {
 function render() {
   const total=filtered.length;
   const pages=Math.ceil(total/PAGE_SIZE), start=(cp-1)*PAGE_SIZE, slice=filtered.slice(start,start+PAGE_SIZE);
-  document.getElementById('pageSub').textContent = `${total} банкетів`;
+  document.getElementById('pageSub').textContent = drafts.length
+    ? `${total} банкетів · ${drafts.length} чернеток на пристрої`
+    : `${total} банкетів`;
+  renderDrafts();
 
   if (!slice.length) {
     document.getElementById('tblBody').innerHTML = '<div class="loader-wrap" style="color:var(--text-muted)">Банкетів не знайдено 🔍</div>';
@@ -182,12 +193,45 @@ function render() {
   } else { pg.style.display='none'; pi.textContent=`${total} записів`; }
 }
 
+function renderDrafts() {
+  const section = document.getElementById('draftsSection');
+  const list = document.getElementById('draftsList');
+  if (!drafts.length) {
+    section.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  section.style.display = 'block';
+  list.innerHTML = drafts.map(d => `
+    <div class="banquet-row" style="grid-template-columns:120px 1fr 150px 80px 120px 110px 120px;align-items:center" onclick="location.href='add.html?draft=${d.id}'">
+      <div class="br-date">${d.date ? fmtDate(d.date) : 'Без дати'}</div>
+      <div><div class="br-name">${d.clientName || 'Без імені'}</div>${d.comment?`<div class="br-note">${d.comment.slice(0,40)}${d.comment.length>40?'…':''}</div>`:''}</div>
+      <div class="br-phone">${d.clientPhone || '—'}</div>
+      <div class="br-guests">👥 ${d.guests || 0}</div>
+      <div class="br-sum">${fmt(d.deposit || 0)}</div>
+      <div class="br-sum acc">${fmt(d.totalFinal || 0)}</div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+        <span class="status-pill" style="background:rgba(245,200,66,.1);color:var(--yellow);border:1px solid rgba(245,200,66,.25)">Чернетка</span>
+        <button class="btn-ghost" style="font-size:11px;padding:6px 10px" onclick="event.stopPropagation();deleteDraft('${d.id}')">Видалити</button>
+      </div>
+    </div>
+  `).join('');
+}
+
 function chgPage(p){cp=p;render();window.scrollTo(0,0);}
 
 async function syncAndRender() {
   showToast('🔄 Завантаження...');
-  try { all=(await db_getBanquets()).sort((a,b)=>new Date(b.date)-new Date(a.date)); applyFilter(); showToast('✅ Оновлено'); }
+  try { all=(await db_getBanquets()).sort((a,b)=>new Date(b.date)-new Date(a.date)); drafts = db_getLocalDrafts(); applyFilter(); showToast('✅ Оновлено'); }
   catch { showToast('⚠️ Помилка завантаження'); }
+}
+
+function deleteDraft(id) {
+  if (!confirm('Видалити чернетку з пристрою?')) return;
+  db_deleteLocalDraft(id);
+  drafts = db_getLocalDrafts();
+  render();
+  showToast('🗑 Чернетку видалено');
 }
 
 init();

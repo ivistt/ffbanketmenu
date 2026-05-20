@@ -7,6 +7,8 @@
 ══════════════════════════════════════════════════════════════ */
 
 const API_URL = 'https://dark-morning-bd95.skifchaqwerty.workers.dev'; // ← https://your-worker.workers.dev (без слешу на кінці)
+const LOCAL_DRAFTS_KEY = 'ogonh_banquet_drafts_v1';
+const ACTIVE_DRAFT_KEY = 'ogonh_active_banquet_draft_v1';
 
 /* ══════════════════════════════════════════════════════════════
    API — запити через Cloudflare Worker
@@ -86,6 +88,80 @@ async function api_delete(table, id) {
   } catch {
     return text;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LOCAL DRAFTS — чернетки банкетів на пристрої
+══════════════════════════════════════════════════════════════ */
+function _readDraftStore() {
+  try {
+    const raw = localStorage.getItem(LOCAL_DRAFTS_KEY);
+    const data = raw ? JSON.parse(raw) : [];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function _writeDraftStore(drafts) {
+  localStorage.setItem(LOCAL_DRAFTS_KEY, JSON.stringify(drafts));
+}
+
+function db_getLocalDrafts() {
+  return _readDraftStore()
+    .map(d => ({
+      ...d,
+      status: 'draft',
+      totalBase: d.totalBase || 0,
+      totalFinal: d.totalFinal || 0,
+      deposit: d.deposit || 0,
+      guests: d.guests || 0,
+      clientName: d.clientName || 'Без імені',
+      clientPhone: d.clientPhone || '',
+      createdAt: d.createdAt || d.updatedAt || new Date().toISOString(),
+      updatedAt: d.updatedAt || d.createdAt || new Date().toISOString(),
+    }))
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+}
+
+function db_getLocalDraft(id) {
+  return db_getLocalDrafts().find(d => d.id === id) || null;
+}
+
+function db_saveLocalDraft(draft) {
+  const drafts = _readDraftStore();
+  const now = new Date().toISOString();
+  const id = draft.id || 'draft_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  const next = {
+    ...draft,
+    id,
+    status: 'draft',
+    updatedAt: now,
+    createdAt: draft.createdAt || now,
+  };
+  const idx = drafts.findIndex(d => d.id === id);
+  if (idx >= 0) drafts[idx] = next;
+  else drafts.unshift(next);
+  _writeDraftStore(drafts);
+  localStorage.setItem(ACTIVE_DRAFT_KEY, id);
+  return next;
+}
+
+function db_deleteLocalDraft(id) {
+  const drafts = _readDraftStore().filter(d => d.id !== id);
+  _writeDraftStore(drafts);
+  if (localStorage.getItem(ACTIVE_DRAFT_KEY) === id) {
+    localStorage.removeItem(ACTIVE_DRAFT_KEY);
+  }
+}
+
+function db_getActiveLocalDraftId() {
+  return localStorage.getItem(ACTIVE_DRAFT_KEY) || '';
+}
+
+function db_setActiveLocalDraftId(id) {
+  if (id) localStorage.setItem(ACTIVE_DRAFT_KEY, id);
+  else localStorage.removeItem(ACTIVE_DRAFT_KEY);
 }
 
 /* ── Конвертація snake_case (Supabase) ↔ camelCase (app) ── */

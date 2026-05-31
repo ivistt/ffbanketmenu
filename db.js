@@ -332,6 +332,7 @@ async function db_getClientStats(clientId) {
      weight      text,
      extras      jsonb DEFAULT '[]',
      image_url   text,
+     "where"     text,
      sort_order  integer DEFAULT 0
    );
    -- Disable RLS для обох таблиць
@@ -353,7 +354,7 @@ async function db_getMenu() {
         name:       cat.name,
         sort_order: cat.sort_order,
         dishes: dishes
-          .filter(d => d.category_id === cat.id)
+          .filter(d => d.category_id === cat.id && d.where !== 'restourant')
           .map(d => ({
             id:          d.id,
             name:        d.name,
@@ -363,6 +364,7 @@ async function db_getMenu() {
             weight:      d.weight      || '',
             extras:      Array.isArray(d.extras) ? d.extras : [],
             image_url:   d.image_url   || '',
+            where:       d.where       || '',
           })),
       }));
       return _menuCache;

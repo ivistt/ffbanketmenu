@@ -443,6 +443,7 @@ function pickRestaurant(rest, dirty = true) {
   const halls = HALLS_BY_REST[rest];
   const firstHall = Object.keys(halls)[0];
   renderHallButtons(rest, firstHall);
+  renderMenu();
   if (dirty) markDirty();
 }
 
@@ -621,11 +622,14 @@ function renderMenu() {
 
 function getVisibleMenuData() {
   const q = menuSearchQuery.trim().toLowerCase();
-  if (!q) return menuData;
   return menuData
     .map(cat => ({
       ...cat,
-      dishes: cat.dishes.filter(d => (d.name || '').toLowerCase().includes(q)),
+      dishes: cat.dishes.filter(d => {
+        const matchesSearch = !q || (d.name || '').toLowerCase().includes(q);
+        const matchesRestaurant = !d.restaurant || d.restaurant === selectedRestaurant;
+        return matchesSearch && matchesRestaurant;
+      }),
     }))
     .filter(cat => cat.dishes.length);
 }

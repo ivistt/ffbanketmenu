@@ -226,6 +226,15 @@
       </div>
 
       <div class="field">
+        <label class="field-label">У якому ресторані</label>
+        <div class="radio-group">
+          <label class="radio-option"><input type="radio" name="dishRestaurant" value="all" checked> І там, і там</label>
+          <label class="radio-option"><input type="radio" name="dishRestaurant" value="main"> Тільки основний ресторан</label>
+          <label class="radio-option"><input type="radio" name="dishRestaurant" value="dalnyk"> Тільки Дальник</label>
+        </div>
+      </div>
+
+      <div class="field">
         <label class="field-label">Зображення</label>
         <div style="display:flex;gap:8px;align-items:center">
           <input class="field-input" id="dishImage" type="text" style="flex:1" oninput="previewImg()">
@@ -244,6 +253,7 @@
 
       <div class="modal-footer">
         <button class="btn-danger" id="dishDeleteBtn" style="display:none;margin-right:auto" onclick="deleteDish()">Видалити</button>
+        <button class="btn-ghost" id="dishDuplicateBtn" style="display:none" onclick="duplicateDish()">Дублювати</button>
         <button class="btn-ghost" onclick="closeModal('dishModalBg')">Скасувати</button>
         <button class="btn-primary" onclick="saveDish()">Зберегти</button>
       </div>
@@ -397,6 +407,11 @@ function renderDishes(list) {
       : d.where === 'restourant'
         ? `<span class="badge badge-hidden">Столи</span>`
         : `<span class="badge badge-cat">Всюди</span>`;
+    const restaurantBadge = d.restaurant === 'main'
+      ? `<span class="badge badge-active">Основний</span>`
+      : d.restaurant === 'dalnyk'
+        ? `<span class="badge badge-hidden">Дальник</span>`
+        : `<span class="badge badge-cat">2 ресторани</span>`;
     return `<div class="dish-card" data-dish-id="${escHtml(d.id)}">
       <div class="dish-edit-badge">✏️ Редагувати</div>
       ${imgEl}
@@ -409,6 +424,7 @@ function renderDishes(list) {
           <div class="dish-badges">
             ${cat ? `<span class="badge badge-cat">${escHtml((cat.icon||'') + ' ' + cat.name)}</span>` : ''}
             ${whereBadge}
+            ${restaurantBadge}
           </div>
         </div>
       </div>
@@ -468,9 +484,14 @@ function openDishModal(d) {
   document.getElementById('dishImage').value         = d?.image_url   || IMAGE_BASE;
   document.getElementById('dishSort').value          = d?.sort_order  ?? '';
   document.getElementById('dishDeleteBtn').style.display = isEdit ? '' : 'none';
+  document.getElementById('dishDuplicateBtn').style.display = isEdit ? '' : 'none';
   const dishWhere = d?.where === 'banquet' ? 'banquet' : d?.where === 'restourant' ? 'restourant' : 'all';
   document.querySelectorAll('input[name="dishWhere"]').forEach(r => {
     r.checked = r.value === dishWhere;
+  });
+  const dishRestaurant = d?.restaurant === 'main' ? 'main' : d?.restaurant === 'dalnyk' ? 'dalnyk' : 'all';
+  document.querySelectorAll('input[name="dishRestaurant"]').forEach(r => {
+    r.checked = r.value === dishRestaurant;
   });
 
   const sel = document.getElementById('dishCategory');
@@ -502,6 +523,7 @@ async function saveDish() {
     image_url:    document.getElementById('dishImage').value.trim()       || null,
     sort_order:   parseInt(document.getElementById('dishSort').value)     || 0,
     where:        ({ all: null, banquet: 'banquet', restourant: 'restourant' }[(document.querySelector('input[name="dishWhere"]:checked') || {}).value || 'all']),
+    restaurant:   ({ all: null, main: 'main', dalnyk: 'dalnyk' }[(document.querySelector('input[name="dishRestaurant"]:checked') || {}).value || 'all']),
   };
 
   try {
@@ -527,6 +549,39 @@ async function deleteDish() {
   try {
     await api_delete('menu_dishes', id);
     showToast('🗑 Страву видалено');
+    closeModal('dishModalBg');
+    await loadAll();
+  } catch(err) {
+    showToast('⚠️ ' + err.message);
+  }
+}
+
+async function duplicateDish() {
+  const name  = document.getElementById('dishName').value.trim();
+  const price = parseInt(document.getElementById('dishPrice').value, 10);
+  const catId = document.getElementById('dishCategory').value;
+
+  if (!name)        { showToast('⚠️ Введіть назву страви'); return; }
+  if (isNaN(price)) { showToast('⚠️ Введіть ціну'); return; }
+  if (!catId)       { showToast('⚠️ Оберіть категорію'); return; }
+
+  const body = {
+    id:          'dish_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+    name:        `${name} (копія)`,
+    description: document.getElementById('dishDesc').value.trim()        || null,
+    composition: document.getElementById('dishComposition').value.trim() || null,
+    price,
+    weight:      document.getElementById('dishWeight').value.trim()      || null,
+    category_id: catId,
+    image_url:   document.getElementById('dishImage').value.trim()       || null,
+    sort_order:  parseInt(document.getElementById('dishSort').value)     || 0,
+    where:       ({ all: null, banquet: 'banquet', restourant: 'restourant' }[(document.querySelector('input[name="dishWhere"]:checked') || {}).value || 'all']),
+    restaurant:  ({ all: null, main: 'main', dalnyk: 'dalnyk' }[(document.querySelector('input[name="dishRestaurant"]:checked') || {}).value || 'all']),
+  };
+
+  try {
+    await api_insert('menu_dishes', body);
+    showToast('📄 Дублікат страви створено');
     closeModal('dishModalBg');
     await loadAll();
   } catch(err) {

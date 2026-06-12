@@ -333,6 +333,7 @@ async function db_getClientStats(clientId) {
      extras      jsonb DEFAULT '[]',
      image_url   text,
      "where"     text,
+     restaurant  text,
      sort_order  integer DEFAULT 0
    );
    -- Disable RLS для обох таблиць
@@ -365,6 +366,7 @@ async function db_getMenu() {
             extras:      Array.isArray(d.extras) ? d.extras : [],
             image_url:   d.image_url   || '',
             where:       d.where       || '',
+            restaurant:  d.restaurant  || '',
           })),
       }));
       return _menuCache;

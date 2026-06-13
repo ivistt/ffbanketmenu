@@ -9,7 +9,8 @@
  */
 
 (function () {
-  var WORKER_URL = "https://dark-morning-bd95.skifchaqwerty.workers.dev";
+  var API_URL    = "https://dark-morning-bd95.skifchaqwerty.workers.dev";
+  var WORKER_URL = API_URL + "/auth";
   var TOKEN_KEY  = "ogonh_token";
   var SCOPE_KEY  = "ogonh_scope";
   var USER_KEY   = "ogonh_user_label";
@@ -66,6 +67,7 @@
   }
 
   window.__ogonhAuth = {
+    API_URL: API_URL,
     WORKER_URL: WORKER_URL,
     TOKEN_KEY: TOKEN_KEY,
     SCOPE_KEY: SCOPE_KEY,

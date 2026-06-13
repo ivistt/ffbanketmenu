@@ -9,48 +9,95 @@
  */
 
 (function () {
-  // ─── Налаштування ───────────────────────────────────────────────────────
-  // !! Замінити на реальний URL твого Cloudflare Worker !!
   var WORKER_URL = "https://dark-morning-bd95.skifchaqwerty.workers.dev";
-
   var TOKEN_KEY  = "ogonh_token";
+  var SCOPE_KEY  = "ogonh_scope";
+  var USER_KEY   = "ogonh_user_label";
   var LOGIN_PAGE = "login.html";
-  // ────────────────────────────────────────────────────────────────────────
 
-  // Не блокуємо login.html
+  function clearSession() {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(SCOPE_KEY);
+    sessionStorage.removeItem(USER_KEY);
+  }
+
+  function parseToken(token) {
+    try {
+      var parts = token.split(".");
+      if (parts.length !== 2) return null;
+      var payload = atob(parts[0]);
+      var bits = payload.split(":");
+      if (bits[0] !== "ogonh") return null;
+      if (bits.length === 2) {
+        var legacyExp = parseInt(bits[1], 10);
+        return { scope: "all", exp: legacyExp };
+      }
+      var exp = parseInt(bits[2], 10);
+      return { scope: bits[1] || "all", exp: exp };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getUserLabel(scope) {
+    return scope === "dalnyk"
+      ? "Дальник"
+      : scope === "main"
+        ? "Основа"
+        : "Адмін";
+  }
+
+  function setSession(token, scope, userLabel) {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(SCOPE_KEY, scope || "all");
+    sessionStorage.setItem(USER_KEY, userLabel || getUserLabel(scope || "all"));
+  }
+
+  function isTokenExpired(token) {
+    var parsed = parseToken(token);
+    return !parsed || isNaN(parsed.exp) || Date.now() > parsed.exp;
+  }
+
+  function syncSessionFromToken(token) {
+    var parsed = parseToken(token);
+    if (!parsed || isNaN(parsed.exp) || Date.now() > parsed.exp) return false;
+    setSession(token, parsed.scope, sessionStorage.getItem(USER_KEY) || getUserLabel(parsed.scope));
+    return true;
+  }
+
+  window.__ogonhAuth = {
+    WORKER_URL: WORKER_URL,
+    TOKEN_KEY: TOKEN_KEY,
+    SCOPE_KEY: SCOPE_KEY,
+    USER_KEY: USER_KEY,
+    setToken: function(token) {
+      if (!syncSessionFromToken(token)) throw new Error("INVALID_TOKEN");
+    },
+    setSession: function(data) {
+      if (!data || !data.token) throw new Error("INVALID_AUTH_RESPONSE");
+      setSession(data.token, data.scope || "all", data.userLabel || getUserLabel(data.scope || "all"));
+    },
+    getRestaurantScope: function() {
+      return sessionStorage.getItem(SCOPE_KEY) || "all";
+    },
+    getUserLabel: function() {
+      return sessionStorage.getItem(USER_KEY) || getUserLabel(sessionStorage.getItem(SCOPE_KEY) || "all");
+    },
+    logout: function() {
+      clearSession();
+      location.replace(LOGIN_PAGE);
+    },
+  };
+
   var currentPage = location.pathname.split("/").pop() || "index.html";
   if (currentPage === LOGIN_PAGE) return;
 
   var token = sessionStorage.getItem(TOKEN_KEY);
 
-  if (!token || isTokenExpired(token)) {
-    sessionStorage.removeItem(TOKEN_KEY);
-    // Зберігаємо куди повернутись після логіну
+  if (!token || !syncSessionFromToken(token) || isTokenExpired(token)) {
+    clearSession();
     sessionStorage.setItem("ogonh_redirect", location.href);
     location.replace(LOGIN_PAGE);
-    // Зупиняємо виконання решти скриптів сторінки
     throw new Error("AUTH_REDIRECT");
   }
-
-  // ─── helpers ─────────────────────────────────────────────────────────────
-
-  function isTokenExpired(token) {
-    try {
-      var parts = token.split(".");
-      if (parts.length !== 2) return true;
-      var payload = atob(parts[0]);          // "ogonh:TIMESTAMP"
-      var exp = parseInt(payload.split(":")[1], 10);
-      return isNaN(exp) || Date.now() > exp;
-    } catch (e) {
-      return true;
-    }
-  }
-
-  // Публічне API — викликається з login.html після успішного логіну
-  window.__ogonhAuth = {
-    WORKER_URL: WORKER_URL,
-    TOKEN_KEY:  TOKEN_KEY,
-    setToken: function(t) { sessionStorage.setItem(TOKEN_KEY, t); },
-    logout:   function()  { sessionStorage.removeItem(TOKEN_KEY); location.replace(LOGIN_PAGE); },
-  };
 })();

@@ -10,6 +10,32 @@ const API_URL = 'https://dark-morning-bd95.skifchaqwerty.workers.dev'; // ← ht
 const LOCAL_DRAFTS_KEY = 'ogonh_banquet_drafts_v1';
 const ACTIVE_DRAFT_KEY = 'ogonh_active_banquet_draft_v1';
 
+function db_getCurrentRestaurantScope() {
+  const authScope = window.__ogonhAuth && typeof window.__ogonhAuth.getRestaurantScope === 'function'
+    ? window.__ogonhAuth.getRestaurantScope()
+    : sessionStorage.getItem('ogonh_scope') || 'all';
+  return authScope === 'main' || authScope === 'dalnyk' ? authScope : 'all';
+}
+
+function inferRestaurantByHall(hall) {
+  return ['terrace', 'big', 'cafe'].includes(hall) ? 'dalnyk' : 'main';
+}
+
+function banquetRestaurantLabel(restaurant) {
+  return restaurant === 'dalnyk' ? '🌿 Огонь Дальник' : '🏛️ ОГОНЬ Одесса';
+}
+
+function draftMatchesScope(draft) {
+  const scope = db_getCurrentRestaurantScope();
+  if (scope === 'all') return true;
+  const restaurant = draft.restaurant || inferRestaurantByHall(draft.hall);
+  return restaurant === scope;
+}
+
+function getActiveDraftKey() {
+  return `${ACTIVE_DRAFT_KEY}_${db_getCurrentRestaurantScope()}`;
+}
+
 /* ══════════════════════════════════════════════════════════════
    API — запити через Cloudflare Worker
 ══════════════════════════════════════════════════════════════ */
@@ -109,6 +135,7 @@ function _writeDraftStore(drafts) {
 
 function db_getLocalDrafts() {
   return _readDraftStore()
+    .filter(draftMatchesScope)
     .map(d => ({
       ...d,
       status: 'draft',
@@ -134,6 +161,7 @@ function db_saveLocalDraft(draft) {
   const id = draft.id || 'draft_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
   const next = {
     ...draft,
+    restaurant: draft.restaurant || inferRestaurantByHall(draft.hall),
     id,
     status: 'draft',
     updatedAt: now,
@@ -143,29 +171,30 @@ function db_saveLocalDraft(draft) {
   if (idx >= 0) drafts[idx] = next;
   else drafts.unshift(next);
   _writeDraftStore(drafts);
-  localStorage.setItem(ACTIVE_DRAFT_KEY, id);
+  localStorage.setItem(getActiveDraftKey(), id);
   return next;
 }
 
 function db_deleteLocalDraft(id) {
   const drafts = _readDraftStore().filter(d => d.id !== id);
   _writeDraftStore(drafts);
-  if (localStorage.getItem(ACTIVE_DRAFT_KEY) === id) {
-    localStorage.removeItem(ACTIVE_DRAFT_KEY);
+  if (localStorage.getItem(getActiveDraftKey()) === id) {
+    localStorage.removeItem(getActiveDraftKey());
   }
 }
 
 function db_getActiveLocalDraftId() {
-  return localStorage.getItem(ACTIVE_DRAFT_KEY) || '';
+  return localStorage.getItem(getActiveDraftKey()) || '';
 }
 
 function db_setActiveLocalDraftId(id) {
-  if (id) localStorage.setItem(ACTIVE_DRAFT_KEY, id);
-  else localStorage.removeItem(ACTIVE_DRAFT_KEY);
+  if (id) localStorage.setItem(getActiveDraftKey(), id);
+  else localStorage.removeItem(getActiveDraftKey());
 }
 
 /* ── Конвертація snake_case (Supabase) ↔ camelCase (app) ── */
 function banquetFromSB(b) {
+  const restaurant = b.restaurant || inferRestaurantByHall(b.hall);
   return {
     id:          b.id,
     clientId:    b.client_id    || '',
@@ -173,6 +202,8 @@ function banquetFromSB(b) {
     clientPhone: b.client_phone || '',
     date:        b.date         || '',
     time:        b.time         || '',
+    restaurant,
+    restaurantLabel: banquetRestaurantLabel(restaurant),
     hall:        b.hall         || 'big',
     hallLabel:   b.hall_label   || 'Великий зал',
     guests:      b.guests       || 0,
@@ -189,6 +220,7 @@ function banquetFromSB(b) {
 }
 
 function banquetToSB(b) {
+  const restaurant = b.restaurant || inferRestaurantByHall(b.hall);
   return {
     id:           b.id,
     client_id:    b.clientId    || '',
@@ -196,6 +228,7 @@ function banquetToSB(b) {
     client_phone: b.clientPhone || '',
     date:         b.date        || '',
     time:         b.time        || '',
+    restaurant,
     hall:         b.hall        || 'big',
     hall_label:   b.hallLabel   || 'Великий зал',
     guests:       b.guests      || 0,

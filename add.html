@@ -356,10 +356,11 @@ body { overflow: hidden; }
       </div>
       <div class="form-group">
         <label>Ресторан</label>
-        <div style="display:flex;gap:8px;margin-top:4px">
+        <div id="restaurantButtons" style="display:flex;gap:8px;margin-top:4px">
           <button type="button" class="rest-btn active" id="rest-main" onclick="pickRestaurant('main')">🏛️ ОГОНЬ Одесса</button>
           <button type="button" class="rest-btn" id="rest-dalnyk" onclick="pickRestaurant('dalnyk')">🌿 Огонь Дальник</button>
         </div>
+        <div id="restaurantScopeHint" style="display:none;font-size:11px;color:var(--text-muted);margin-top:8px"></div>
       </div>
       <div class="form-group">
         <label>Зал</label>
@@ -508,6 +509,7 @@ let _lastBanquet = null; // зберігаємо після успішного �
 let _draftId = getParam('draft') || db_getActiveLocalDraftId() || '';
 let _draftSaveTimer = null;
 let menuSearchQuery = '';
+const USER_SCOPE = db_getCurrentRestaurantScope();
 
 function markDirty() {
   _isDirty = true;
@@ -640,11 +642,38 @@ const HALLS_BY_REST = {
 };
 let selectedRestaurant = 'main';
 
+function getLockedRestaurant() {
+  return USER_SCOPE === 'main' || USER_SCOPE === 'dalnyk' ? USER_SCOPE : '';
+}
+
+function applyRestaurantScopeLock() {
+  const locked = getLockedRestaurant();
+  const hint = document.getElementById('restaurantScopeHint');
+  if (!locked) {
+    if (hint) hint.style.display = 'none';
+    return;
+  }
+  document.querySelectorAll('.rest-btn').forEach(btn => {
+    const isAllowed = btn.id === 'rest-' + locked;
+    btn.classList.toggle('active', isAllowed);
+    btn.style.display = isAllowed ? 'inline-flex' : 'none';
+    btn.disabled = !isAllowed;
+  });
+  if (hint) {
+    hint.style.display = 'block';
+    hint.textContent = locked === 'dalnyk'
+      ? 'Ви увійшли як Дальник — доступний тільки ресторан Огонь Дальник.'
+      : 'Ви увійшли як Основа — доступний тільки ресторан ОГОНЬ Одесса.';
+  }
+}
+
 function getHallLabel(restaurant, hall) {
   return (HALLS_BY_REST[restaurant] || {})[hall] || hall;
 }
 
 function pickRestaurant(rest) {
+  const locked = getLockedRestaurant();
+  if (locked && rest !== locked) return;
   selectedRestaurant = rest;
   document.querySelectorAll('.rest-btn').forEach(b => b.classList.toggle('active', b.id === 'rest-'+rest));
   // Set default hall for restaurant and re-render buttons
@@ -673,7 +702,9 @@ function pickHall(hall) {
 }
 
 // Init hall buttons on page load
-renderHallButtons('main', 'white');
+selectedRestaurant = getLockedRestaurant() || 'main';
+renderHallButtons(selectedRestaurant, Object.keys(HALLS_BY_REST[selectedRestaurant])[0]);
+applyRestaurantScopeLock();
 
 /* ── QTY & TOTALS ── */
 function chgQty(id,delta) {
@@ -867,10 +898,13 @@ function goNew() {
   ['f-name','f-phone','f-date','f-time','f-guests','f-deposit','f-comment'].forEach(id=>{document.getElementById(id).value='';document.getElementById(id).classList.remove('err');});
   document.querySelectorAll('.ferr').forEach(e=>e.classList.remove('show'));
   document.getElementById('clientHint').classList.remove('show');
-  selectedRestaurant='main'; selectedHall='white';
-  renderHallButtons('main','white');
-  document.getElementById('rest-main').classList.add('active');
-  document.getElementById('rest-dalnyk').classList.remove('active');
+  selectedRestaurant=getLockedRestaurant() || 'main';
+  selectedHall=Object.keys(HALLS_BY_REST[selectedRestaurant])[0];
+  renderHallButtons(selectedRestaurant,selectedHall);
+  document.querySelectorAll('.rest-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.id === 'rest-' + selectedRestaurant)
+  );
+  applyRestaurantScopeLock();
   quantities={};selectionOrder=[];modifier=0;_isDirty=false;_lastBanquet=null;
   if (_draftId) db_deleteLocalDraft(_draftId);
   _draftId = '';
@@ -1073,9 +1107,10 @@ function restoreDraftState() {
   document.getElementById('f-guests').value = draft.guests || '';
   document.getElementById('f-deposit').value = draft.deposit || '';
   document.getElementById('f-comment').value = draft.comment || '';
-  selectedRestaurant = draft.restaurant || 'main';
+  selectedRestaurant = getLockedRestaurant() || draft.restaurant || 'main';
   renderHallButtons(selectedRestaurant, draft.hall || Object.keys(HALLS_BY_REST[selectedRestaurant])[0]);
   document.querySelectorAll('.rest-btn').forEach(b => b.classList.toggle('active', b.id === 'rest-' + selectedRestaurant));
+  applyRestaurantScopeLock();
   quantities = {};
   selectionOrder = [];
   (draft.dishes || []).forEach(d => {

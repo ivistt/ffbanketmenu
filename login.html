@@ -154,7 +154,8 @@
     try {
       var parts = token.split(".");
       var payload = atob(parts[0]);
-      var exp = parseInt(payload.split(":")[1], 10);
+      var bits = payload.split(":");
+      var exp = parseInt(bits[bits.length - 1], 10);
       if (!isNaN(exp) && Date.now() <= exp) {
         var dest = sessionStorage.getItem("ogonh_redirect") || "index.html";
         sessionStorage.removeItem("ogonh_redirect");
@@ -199,7 +200,13 @@ async function doLogin() {
     var data = await resp.json();
 
     if (data.ok && data.token) {
-      sessionStorage.setItem("ogonh_token", data.token);
+      if (window.__ogonhAuth && typeof window.__ogonhAuth.setSession === "function") {
+        window.__ogonhAuth.setSession(data);
+      } else {
+        sessionStorage.setItem("ogonh_token", data.token);
+        sessionStorage.setItem("ogonh_scope", data.scope || "all");
+        sessionStorage.setItem("ogonh_user_label", data.userLabel || "Адмін");
+      }
       var dest = sessionStorage.getItem("ogonh_redirect") || "index.html";
       sessionStorage.removeItem("ogonh_redirect");
       location.replace(dest);

@@ -256,10 +256,11 @@ body { overflow: hidden; }
       </div>
       <div class="form-group">
         <label>Ресторан</label>
-        <div style="display:flex;gap:8px;margin-top:4px">
+        <div id="restaurantButtons" style="display:flex;gap:8px;margin-top:4px">
           <button type="button" class="rest-btn" id="rest-main" onclick="pickRestaurant('main')">🏛️ ОГОНЬ Одесса</button>
           <button type="button" class="rest-btn" id="rest-dalnyk" onclick="pickRestaurant('dalnyk')">🌿 Огонь Дальник</button>
         </div>
+        <div id="restaurantScopeHint" style="display:none;font-size:11px;color:var(--text-muted);margin-top:8px"></div>
       </div>
       <div class="form-group">
         <label>Зал</label>
@@ -424,6 +425,7 @@ let _isDirty    = false;
 let _lastSaved  = null;
 let _origBanquet = null;
 let menuSearchQuery = '';
+const USER_SCOPE = db_getCurrentRestaurantScope();
 
 const HALLS_BY_REST = {
   main: {
@@ -438,11 +440,38 @@ const HALLS_BY_REST = {
 };
 let selectedRestaurant = 'main';
 
+function getLockedRestaurant() {
+  return USER_SCOPE === 'main' || USER_SCOPE === 'dalnyk' ? USER_SCOPE : '';
+}
+
+function applyRestaurantScopeLock() {
+  const locked = getLockedRestaurant();
+  const hint = document.getElementById('restaurantScopeHint');
+  if (!locked) {
+    if (hint) hint.style.display = 'none';
+    return;
+  }
+  document.querySelectorAll('.rest-btn').forEach(btn => {
+    const isAllowed = btn.id === 'rest-' + locked;
+    btn.classList.toggle('active', isAllowed);
+    btn.style.display = isAllowed ? 'inline-flex' : 'none';
+    btn.disabled = !isAllowed;
+  });
+  if (hint) {
+    hint.style.display = 'block';
+    hint.textContent = locked === 'dalnyk'
+      ? 'Ви увійшли як Дальник — доступний тільки ресторан Огонь Дальник.'
+      : 'Ви увійшли як Основа — доступний тільки ресторан ОГОНЬ Одесса.';
+  }
+}
+
 function getHallLabel(restaurant, hall) {
   return (HALLS_BY_REST[restaurant] || {})[hall] || hall;
 }
 
 function pickRestaurant(rest, dirty = true) {
+  const locked = getLockedRestaurant();
+  if (locked && rest !== locked) return;
   selectedRestaurant = rest;
   document.querySelectorAll('.rest-btn').forEach(b => b.classList.toggle('active', b.id === 'rest-'+rest));
   const halls = HALLS_BY_REST[rest];
@@ -460,6 +489,8 @@ function renderHallButtons(rest, activeHall) {
   ).join('');
   selectedHall = activeHall;
 }
+
+applyRestaurantScopeLock();
 
 function pickHall(hall, dirty = true) {
   selectedHall = hall;
@@ -527,13 +558,15 @@ async function init() {
 
     // Restaurant + Hall
     const dalnykHalls = ['terrace', 'big', 'cafe'];
-    const savedRest = b.restaurant || (dalnykHalls.includes(b.hall) ? 'dalnyk' : 'main');
+    const lockedRestaurant = getLockedRestaurant();
+    const savedRest = lockedRestaurant || b.restaurant || (dalnykHalls.includes(b.hall) ? 'dalnyk' : 'main');
     selectedRestaurant = savedRest;
     document.querySelectorAll('.rest-btn').forEach(btn =>
       btn.classList.toggle('active', btn.id === 'rest-' + savedRest)
     );
     const savedHall = b.hall || Object.keys(HALLS_BY_REST[savedRest])[0];
     renderHallButtons(savedRest, savedHall);
+    applyRestaurantScopeLock();
 
     // Status — map legacy 'pending' to 'confirmed'
     selectedStatus = (b.status === 'cancelled') ? 'cancelled' : 'confirmed';

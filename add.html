@@ -485,6 +485,9 @@ body { overflow: hidden; }
       <button class="modal-btn" onclick="copyKitchenData()" id="copyKitchenBtn" style="flex:1;min-width:220px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text);font-family:var(--fb);font-size:13px;font-weight:700;padding:13px;border-radius:var(--radius);cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:8px">
         🍽️ Скопіювати на кухню
       </button>
+      <button class="modal-btn" onclick="printBanquetResult()" id="printBtn" style="flex:1;min-width:220px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text);font-family:var(--fb);font-size:13px;font-weight:700;padding:13px;border-radius:var(--radius);cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:8px">
+        🖨️ Друкувати результат
+      </button>
     </div>
     <div class="modal-btns">
       <button class="modal-btn sec" onclick="goNew()">+ Ще один</button>
@@ -499,6 +502,7 @@ body { overflow: hidden; }
 db_seed(); renderOfflineBanner();
 
 let menuData = [], quantities = {}, modifier = 0, selectedHall = 'white';
+let selectionOrder = [];
 let _isDirty = false;
 let _lastBanquet = null; // зберігаємо після успішного збереження
 let _draftId = getParam('draft') || db_getActiveLocalDraftId() || '';
@@ -673,7 +677,14 @@ renderHallButtons('main', 'white');
 
 /* ── QTY & TOTALS ── */
 function chgQty(id,delta) {
+  const prevQty = quantities[id] || 0;
   quantities[id]=roundQty(Math.max(0,(quantities[id]||0)+delta));
+  if (prevQty <= 0 && quantities[id] > 0) {
+    selectionOrder = selectionOrder.filter(x => x !== id);
+    selectionOrder.push(id);
+  } else if (quantities[id] <= 0) {
+    selectionOrder = selectionOrder.filter(x => x !== id);
+  }
   document.getElementById('qv-'+id).textContent=fmtQty(quantities[id]);
   document.getElementById('dc-'+id).classList.toggle('sel',quantities[id]>0);
   markDirty();
@@ -860,7 +871,7 @@ function goNew() {
   renderHallButtons('main','white');
   document.getElementById('rest-main').classList.add('active');
   document.getElementById('rest-dalnyk').classList.remove('active');
-  quantities={};modifier=0;_isDirty=false;_lastBanquet=null;
+  quantities={};selectionOrder=[];modifier=0;_isDirty=false;_lastBanquet=null;
   if (_draftId) db_deleteLocalDraft(_draftId);
   _draftId = '';
   db_setActiveLocalDraftId('');
@@ -915,6 +926,61 @@ function copyKitchenData() {
   ];
 
   copyTextWithFeedback(lines.join('\n'), 'copyKitchenBtn', '🍽️ Скопіювати на кухню');
+}
+
+function printBanquetResult() {
+  if (!_lastBanquet) return;
+  const b = _lastBanquet;
+  const win = window.open('', '_blank', 'width=420,height=900');
+  if (!win) {
+    showToast('⚠️ Дозвольте відкриття вікна для друку');
+    return;
+  }
+  const dishesHtml = b.sel.map(d => `
+    <div class="row">
+      <span>${d.name} ×${fmtQty(d.qty)}</span>
+      <b>${fmt(d.subtotal)}</b>
+    </div>
+  `).join('');
+  win.document.write(`<!DOCTYPE html>
+  <html lang="uk">
+  <head>
+    <meta charset="UTF-8">
+    <title>Друк банкету</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 18px; color: #111; }
+      .wrap { max-width: 360px; margin: 0 auto; }
+      h1 { font-size: 18px; margin: 0 0 12px; }
+      .meta, .row { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0; }
+      .stack { margin: 12px 0; }
+      .sep { border-top: 1px dashed #999; margin: 12px 0; }
+      .big { font-size: 16px; font-weight: 700; }
+      .muted { color: #444; }
+      @media print { body { padding: 0; } .wrap { max-width: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Банкет</h1>
+      <div class="meta"><span>Клієнт</span><b>${escapeHtml(b.name)}</b></div>
+      <div class="meta"><span>Телефон</span><b>${escapeHtml(b.phone)}</b></div>
+      <div class="meta"><span>Дата</span><b>${escapeHtml(fmtDate(b.date))}${b.time ? ` о ${escapeHtml(b.time)}` : ''}</b></div>
+      <div class="meta"><span>Ресторан</span><b>${escapeHtml(b.restaurantLabel)}</b></div>
+      <div class="meta"><span>Зал</span><b>${escapeHtml(b.hallLabel)}</b></div>
+      <div class="meta"><span>Гостей</span><b>${b.guests}</b></div>
+      <div class="sep"></div>
+      <div class="stack">${dishesHtml}</div>
+      <div class="sep"></div>
+      <div class="meta"><span>Залог</span><b>${fmt(b.deposit)}</b></div>
+      <div class="meta"><span>Загальна сума</span><b>${fmt(b.final)}</b></div>
+      <div class="meta big"><span>Залишилось</span><b>${fmt(Math.max(b.final - b.deposit, 0))}</b></div>
+    </div>
+    <script>
+      window.onload = () => { window.print(); setTimeout(() => window.close(), 300); };
+    <\/script>
+  </body>
+  </html>`);
+  win.document.close();
 }
 
 function copyTextWithFeedback(text, btnId, idleText) {
@@ -1011,7 +1077,11 @@ function restoreDraftState() {
   renderHallButtons(selectedRestaurant, draft.hall || Object.keys(HALLS_BY_REST[selectedRestaurant])[0]);
   document.querySelectorAll('.rest-btn').forEach(b => b.classList.toggle('active', b.id === 'rest-' + selectedRestaurant));
   quantities = {};
-  (draft.dishes || []).forEach(d => { quantities[d.id] = d.qty; });
+  selectionOrder = [];
+  (draft.dishes || []).forEach(d => {
+    quantities[d.id] = d.qty;
+    selectionOrder.push(d.id);
+  });
   modifier = draft.modifier || 0;
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('s-on','d-on'));
   if (modifier !== 0) {
@@ -1029,8 +1099,9 @@ function restoreDraftState() {
 function roundQty(q){return Math.round(q*2)/2;}
 function roundMoney(n){return Math.round(n);}
 function fmtQty(q){return Number.isInteger(q)?String(q):q.toFixed(1).replace(/\.0$/,'');}
+function escapeHtml(s){return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function findDish(id){for(const c of menuData)for(const d of c.dishes)if(d.id===id)return d;return null;}
-function getSel(){return Object.entries(quantities).filter(([,q])=>q>0).map(([id,qty])=>{const d=findDish(id);return d?{...d,qty,subtotal:roundMoney(d.price*qty)}:null}).filter(Boolean);}
+function getSel(){return selectionOrder.map(id=>{const qty=quantities[id];const d=findDish(id);return qty>0&&d?{...d,qty,subtotal:roundMoney(d.price*qty)}:null;}).filter(Boolean);}
 function clearErr(fid,eid){document.getElementById(fid).classList.remove('err');document.getElementById(eid).classList.remove('show');}
 
 restoreDraftState();

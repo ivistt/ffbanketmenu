@@ -856,7 +856,7 @@ async function handleSubmit() {
       guests, deposit, comment,
       modifier, modLabel, totalBase:base, totalFinal:final,
       status:'confirmed',
-      dishes:sel.map(d=>({name:d.name,qty:d.qty,price:d.price})),
+      dishes:sel.map(d=>({id:d.id,name:d.name,qty:d.qty,price:d.price,categoryId:d.categoryId,categoryName:d.categoryName})),
     });
 
     _isDirty = false; // скидаємо після успішного збереження
@@ -878,7 +878,7 @@ async function handleSubmit() {
       <b>Зал:</b> ${hallLabel}<br><b>Гостей:</b> ${guests}<br>
       <b>Залог:</b> ${fmt(deposit)}<br><b>Обслуговування:</b> ${modLabel}<br>
       ${comment?`<b>Коментар:</b> ${comment}<br>`:''}
-      <br><b>Страви:</b><br>${sel.map(d=>`<b>${d.name}</b> ×${fmtQty(d.qty)} — ${fmt(d.subtotal)}`).join('<br>')}<br><br>
+      <br><b>Страви:</b><br>${renderGroupedDishSummaryHtml(sel)}<br><br>
       <b>Сума без надбавки:</b> ${fmt(base)}<br><b>Загальна сума:</b> ${fmt(final)}<br>
       <b>Залишилось:</b> ${fmt(Math.max(final-deposit,0))}<br>
       <b>На людину:</b> ${fmt(Math.round(base/guests))}`;
@@ -931,7 +931,7 @@ function copyBanquetData() {
     `👥 Гостей: ${b.guests}`,
     ``,
     `🍽️ Страви:`,
-    ...b.sel.map(d => `   ${d.name} ×${fmtQty(d.qty)} — ${roundMoney(d.price * d.qty)} ₴`),
+    ...buildGroupedDishLines(b.sel, true),
     ``,
     `💰 Залог: ${b.deposit} ₴`,
   ];
@@ -956,7 +956,7 @@ function copyKitchenData() {
     `👥 Гостей: ${b.guests}`,
     ``,
     `🍽️ Страви:`,
-    ...b.sel.map(d => `   ${d.name} ×${fmtQty(d.qty)}`),
+    ...buildGroupedDishLines(b.sel, false),
   ];
 
   copyTextWithFeedback(lines.join('\n'), 'copyKitchenBtn', '🍽️ Скопіювати на кухню');
@@ -970,10 +970,15 @@ function printBanquetResult() {
     showToast('⚠️ Дозвольте відкриття вікна для друку');
     return;
   }
-  const dishesHtml = b.sel.map(d => `
-    <div class="row">
-      <span>${d.name} ×${fmtQty(d.qty)}</span>
-      <b>${fmt(d.subtotal)}</b>
+  const dishesHtml = groupDishesByCategory(b.sel).map(group => `
+    <div class="stack">
+      <div style="font-weight:700;margin:0 0 6px">${escapeHtml(group.name)}</div>
+      ${group.dishes.map(d => `
+        <div class="row">
+          <span>${escapeHtml(d.name)} ×${fmtQty(d.qty)}</span>
+          <b>${fmt(d.subtotal)}</b>
+        </div>
+      `).join('')}
     </div>
   `).join('');
   win.document.write(`<!DOCTYPE html>
@@ -1071,7 +1076,7 @@ function buildDraftPayload() {
     modLabel: modifier>0?`+${modifier}%`:modifier<0?`${modifier}%`:'без',
     totalBase: base,
     totalFinal: final,
-    dishes: getSel().map(d => ({ id: d.id, name: d.name, qty: d.qty, price: d.price })),
+    dishes: getSel().map(d => ({ id: d.id, name: d.name, qty: d.qty, price: d.price, categoryId: d.categoryId, categoryName: d.categoryName })),
   };
 }
 
@@ -1136,7 +1141,81 @@ function roundMoney(n){return Math.round(n);}
 function fmtQty(q){return Number.isInteger(q)?String(q):q.toFixed(1).replace(/\.0$/,'');}
 function escapeHtml(s){return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function findDish(id){for(const c of menuData)for(const d of c.dishes)if(d.id===id)return d;return null;}
-function getSel(){return selectionOrder.map(id=>{const qty=quantities[id];const d=findDish(id);return qty>0&&d?{...d,qty,subtotal:roundMoney(d.price*qty)}:null;}).filter(Boolean);}
+const CATEGORY_ORDER = [
+  'Холодні закуски',
+  'Гарячі закуски',
+  'Салати',
+  'Перші страви',
+  'Супи',
+  'Основні страви',
+  'Гарячі страви',
+  'М\'ясні страви',
+  'Риба та морепродукти',
+  'Гарніри',
+  'Соуси',
+  'Десерти',
+  'Бар'
+];
+function normalizeCategoryName(name) {
+  const raw = String(name || '').trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return 'Інше';
+  if (lower.includes('бар') || lower.includes('напої') || lower.includes('напит')) return 'Бар';
+  if (lower.includes('холод')) return 'Холодні закуски';
+  if (lower.includes('гаряч') && lower.includes('закус')) return 'Гарячі закуски';
+  if (lower.includes('салат')) return 'Салати';
+  if (lower.includes('суп') || lower.includes('перш')) return 'Перші страви';
+  if (lower.includes('гаряч') || lower.includes('основ')) return 'Гарячі страви';
+  if (lower.includes('м\'яс') || lower.includes('мяс')) return 'М\'ясні страви';
+  if (lower.includes('риб') || lower.includes('морепр')) return 'Риба та морепродукти';
+  if (lower.includes('гарнір')) return 'Гарніри';
+  if (lower.includes('соус')) return 'Соуси';
+  if (lower.includes('десерт')) return 'Десерти';
+  return raw;
+}
+function getDishCategoryMetaById(id) {
+  for (const cat of menuData) {
+    const found = (cat.dishes || []).find(d => d.id === id);
+    if (found) return { categoryId: cat.id || '', categoryName: normalizeCategoryName(cat.name) };
+  }
+  return { categoryId: '', categoryName: 'Інше' };
+}
+function getSel(){return selectionOrder.map(id=>{const qty=quantities[id];const d=findDish(id);if(!(qty>0&&d))return null;const cat=getDishCategoryMetaById(id);return{...d,...cat,qty,subtotal:roundMoney(d.price*qty)};}).filter(Boolean);}
+function groupDishesByCategory(dishes) {
+  const groups = [];
+  dishes.forEach(dish => {
+    const categoryName = normalizeCategoryName(dish.categoryName);
+    let group = groups.find(g => g.name === categoryName);
+    if (!group) {
+      group = { name: categoryName, dishes: [] };
+      groups.push(group);
+    }
+    group.dishes.push(dish);
+  });
+  return groups.sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf(a.name);
+    const bi = CATEGORY_ORDER.indexOf(b.name);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi) || a.name.localeCompare(b.name, 'uk');
+  });
+}
+function renderGroupedDishSummaryHtml(dishes, withPrices = true) {
+  return groupDishesByCategory(dishes).map(group => `
+    <b>${escapeHtml(group.name)}</b><br>${group.dishes.map(d => withPrices
+      ? `&nbsp;&nbsp;• ${escapeHtml(d.name)} ×${fmtQty(d.qty)} — ${fmt(d.subtotal)}`
+      : `&nbsp;&nbsp;• ${escapeHtml(d.name)} ×${fmtQty(d.qty)}`
+    ).join('<br>')}`
+  ).join('<br><br>');
+}
+function buildGroupedDishLines(dishes, withPrices = true) {
+  return groupDishesByCategory(dishes).flatMap(group => [
+    `${group.name}:`,
+    ...group.dishes.map(d => withPrices
+      ? `   ${d.name} ×${fmtQty(d.qty)} — ${roundMoney(d.price * d.qty)} ₴`
+      : `   ${d.name} ×${fmtQty(d.qty)}`
+    ),
+    ''
+  ]).slice(0, -1);
+}
 function clearErr(fid,eid){document.getElementById(fid).classList.remove('err');document.getElementById(eid).classList.remove('show');}
 
 restoreDraftState();

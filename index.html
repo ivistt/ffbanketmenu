@@ -70,6 +70,14 @@
   </div>
 
   <div class="section-head">
+    <div class="section-title">Сьогоднішні банкети</div>
+    <a class="btn-ghost" href="banquets.html">Всі банкети →</a>
+  </div>
+  <div class="banquet-list" id="dashToday">
+    <div class="loader-wrap"><div class="loader-dots"><span></span><span></span><span></span></div></div>
+  </div>
+
+  <div class="section-head" style="margin-top:28px">
     <div class="section-title">Майбутні банкети місяця</div>
     <a class="btn-ghost" href="banquets.html">Всі банкети →</a>
   </div>
@@ -110,9 +118,11 @@ document.getElementById('dashDate').textContent =
 const isMobile = () => window.innerWidth <= 768;
 
 function todayMidnight() { const d = new Date(); d.setHours(0,0,0,0); return d; }
+function tomorrowMidnight() { const d = todayMidnight(); d.setDate(d.getDate() + 1); return d; }
 function banquetDate(b)  { return b.date ? new Date((b.date+'').split('T')[0]) : null; }
 
-function isFuture(b)     { const d = banquetDate(b); return d && d >= todayMidnight(); }
+function isToday(b)      { const d = banquetDate(b); return d && d >= todayMidnight() && d < tomorrowMidnight(); }
+function isFuture(b)     { const d = banquetDate(b); return d && d >= tomorrowMidnight(); }
 function isPassed(b)     { const d = banquetDate(b); return d && d < todayMidnight(); }
 function isThisMonth(b)  {
   const now = new Date(), d = banquetDate(b);
@@ -161,6 +171,8 @@ async function render() {
     const [banquets, clients] = await Promise.all([db_getBanquets(), db_getClients()]);
 
     const thisMonth = banquets.filter(isThisMonth);
+    const todayList = thisMonth.filter(b => b.status !== 'cancelled' && isToday(b))
+                               .sort((a,b) => (a.time || '').localeCompare(b.time || '') || a.clientName.localeCompare(b.clientName));
     const upcoming  = thisMonth.filter(b => b.status !== 'cancelled' && isFuture(b))
                                .sort((a,b) => banquetDate(a) - banquetDate(b));
     const passed    = thisMonth.filter(b => b.status !== 'cancelled' && isPassed(b))
@@ -172,6 +184,7 @@ async function render() {
     document.getElementById('stPassed').textContent    = passed.length;
     document.getElementById('stCancelled').textContent = cancelled.length;
 
+    renderList('dashToday',    todayList.slice(0,8), 'Сьогодні банкетів немає');
     renderList('dashUpcoming', upcoming.slice(0,8), 'Майбутніх банкетів цього місяця немає');
     renderList('dashPassed',   passed.slice(0,8),   'Пройшлих банкетів цього місяця ще немає');
 

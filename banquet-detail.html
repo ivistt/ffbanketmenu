@@ -434,23 +434,17 @@ async function renderView() {
     <div class="info-row"><span class="info-key">На людину</span><span class="info-val grn">${b.guests ? fmt(Math.round((b.totalBase||0) / b.guests)) : '—'}</span></div>
   `;
 
-  const dishes = b.dishes || [];
+  const dishes = enrichDishesWithCategories(b.dishes || []);
   document.getElementById('dishesListView').innerHTML = !dishes.length
     ? '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Список страв не вказано</div>'
-    : dishes.map(d => `
-        <div class="dish-row" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
-          <div style="flex:1;min-width:120px;font-size:14px;font-weight:700;color:var(--text)">${d.name}</div>
-          <div style="font-size:12px;font-weight:700;color:var(--text-muted);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 11px">×${d.qty}</div>
-          <div style="font-size:12px;color:var(--text-muted)">${fmt(d.price)}</div>
-          <div style="font-family:var(--fh);font-size:13px;font-weight:700;color:var(--accent);min-width:72px;text-align:right">${fmt(d.price*d.qty)}</div>
-        </div>`).join('');
+    : renderGroupedDishCards(dishes);
   renderDishTotal();
 }
 
 function renderDishTotal() {
   const dishes = editMode
     ? getAllDishesWithQty().filter(d => d.qty > 0)
-    : (b.dishes || []);
+    : enrichDishesWithCategories(b.dishes || []);
   const total = dishes.reduce((s,d) => s + d.price * d.qty, 0);
   const count = dishes.reduce((s,d) => s + d.qty, 0);
   document.getElementById('dishesTotalView').innerHTML = dishes.length ? `
@@ -648,7 +642,10 @@ function calcEditBase() {
 function getAllDishesWithQty() {
   return Object.entries(eQty)
     .filter(([, q]) => q > 0)
-    .map(([id, qty]) => { const d = findDishById(id); return d ? { ...d, qty } : null; })
+    .map(([id, qty]) => {
+      const d = findDishById(id);
+      return d ? { ...d, ...getDishCategoryMeta(d), qty } : null;
+    })
     .filter(Boolean);
 }
 
@@ -676,7 +673,7 @@ async function saveAll() {
   const modAmt   = Math.round(base * eMod / 100);
   const final    = base + modAmt;
   const modLabel = eMod > 0 ? `+${eMod}%` : eMod < 0 ? `${eMod}%` : 'без';
-  const dishes   = allSelected.map(d => ({ id: d.id, name: d.name, qty: d.qty, price: d.price }));
+  const dishes   = allSelected.map(d => ({ id: d.id, name: d.name, qty: d.qty, price: d.price, categoryId: d.categoryId, categoryName: d.categoryName }));
 
   const btn = document.getElementById('btnSaveAll');
   btn.disabled = true;
@@ -725,6 +722,87 @@ function findDishById(id) {
 function findDishIdByName(name) {
   for (const cat of menuData) for (const d of cat.dishes) if (d.name === name) return d.id;
   return null;
+}
+
+const CATEGORY_ORDER = [
+  'Холодні закуски',
+  'Гарячі закуски',
+  'Салати',
+  'Перші страви',
+  'Супи',
+  'Основні страви',
+  'Гарячі страви',
+  'М\'ясні страви',
+  'Риба та морепродукти',
+  'Гарніри',
+  'Соуси',
+  'Десерти',
+  'Бар'
+];
+
+function normalizeCategoryName(name) {
+  const raw = String(name || '').trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return 'Інше';
+  if (lower.includes('бар') || lower.includes('напої') || lower.includes('напит')) return 'Бар';
+  if (lower.includes('холод')) return 'Холодні закуски';
+  if (lower.includes('гаряч') && lower.includes('закус')) return 'Гарячі закуски';
+  if (lower.includes('салат')) return 'Салати';
+  if (lower.includes('суп') || lower.includes('перш')) return 'Перші страви';
+  if (lower.includes('гаряч') || lower.includes('основ')) return 'Гарячі страви';
+  if (lower.includes('м\'яс') || lower.includes('мяс')) return 'М\'ясні страви';
+  if (lower.includes('риб') || lower.includes('морепр')) return 'Риба та морепродукти';
+  if (lower.includes('гарнір')) return 'Гарніри';
+  if (lower.includes('соус')) return 'Соуси';
+  if (lower.includes('десерт')) return 'Десерти';
+  return raw;
+}
+
+function getDishCategoryMeta(dish) {
+  if (dish.categoryName) return { categoryId: dish.categoryId || '', categoryName: normalizeCategoryName(dish.categoryName) };
+  for (const cat of menuData) {
+    const found = (cat.dishes || []).find(d => d.id === dish.id || d.name === dish.name);
+    if (found) return { categoryId: cat.id || '', categoryName: normalizeCategoryName(cat.name) };
+  }
+  return { categoryId: '', categoryName: 'Інше' };
+}
+
+function enrichDishesWithCategories(dishes) {
+  return dishes.map(dish => ({ ...dish, ...getDishCategoryMeta(dish) }));
+}
+
+function groupDishesByCategory(dishes) {
+  const groups = [];
+  dishes.forEach(dish => {
+    const categoryName = normalizeCategoryName(dish.categoryName);
+    let group = groups.find(g => g.name === categoryName);
+    if (!group) {
+      group = { name: categoryName, dishes: [] };
+      groups.push(group);
+    }
+    group.dishes.push(dish);
+  });
+  return groups.sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf(a.name);
+    const bi = CATEGORY_ORDER.indexOf(b.name);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi) || a.name.localeCompare(b.name, 'uk');
+  });
+}
+
+function renderGroupedDishCards(dishes) {
+  return groupDishesByCategory(dishes).map(group => `
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">${group.name}</div>
+      ${group.dishes.map(d => `
+        <div class="dish-row" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px;font-size:14px;font-weight:700;color:var(--text)">${d.name}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 11px">×${d.qty}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${fmt(d.price)}</div>
+          <div style="font-family:var(--fh);font-size:13px;font-weight:700;color:var(--accent);min-width:72px;text-align:right">${fmt(d.price * d.qty)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
 }
 
 init();

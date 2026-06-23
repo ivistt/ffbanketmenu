@@ -217,6 +217,19 @@
       </div>
 
       <div class="field">
+        <label class="field-label">Extra</label>
+        <input class="field-input" id="dishExtras" type="text" placeholder="Наприклад: новинка, гостре">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Через кому. Тег "рекомендуємо" можна вмикати окремою галочкою нижче.</div>
+      </div>
+
+      <div class="field">
+        <label class="radio-option" style="padding:0;border:none;background:none">
+          <input type="checkbox" id="dishRecommended">
+          Рекомендація
+        </label>
+      </div>
+
+      <div class="field">
         <label class="field-label">Де показувати</label>
         <div class="radio-group">
           <label class="radio-option"><input type="radio" name="dishWhere" value="all" checked> Все</label>
@@ -412,12 +425,19 @@ function renderDishes(list) {
       : d.restaurant === 'dalnyk'
         ? `<span class="badge badge-hidden">Дальник</span>`
         : `<span class="badge badge-cat">2 ресторани</span>`;
+    const recommendedBadge = Array.isArray(d.extras) && d.extras.includes('рекомендуємо')
+      ? `<span class="badge badge-active">Рекомендація</span>`
+      : '';
+    const extrasMeta = Array.isArray(d.extras) && d.extras.length
+      ? `<div class="dish-meta">✨ ${escHtml(formatDishExtras(d.extras) || 'рекомендуємо')}</div>`
+      : '';
     return `<div class="dish-card" data-dish-id="${escHtml(d.id)}">
       <div class="dish-edit-badge">✏️ Редагувати</div>
       ${imgEl}
       <div class="dish-body">
         <div class="dish-name">${escHtml(d.name)}</div>
         <div class="dish-desc">${escHtml(d.description || '')}</div>
+        ${extrasMeta}
         ${d.weight ? `<div class="dish-meta">⚖️ ${escHtml(d.weight)}</div>` : ''}
         <div class="dish-footer">
           <div class="dish-price">${fmtPrice(d.price)}</div>
@@ -425,6 +445,7 @@ function renderDishes(list) {
             ${cat ? `<span class="badge badge-cat">${escHtml((cat.icon||'') + ' ' + cat.name)}</span>` : ''}
             ${whereBadge}
             ${restaurantBadge}
+            ${recommendedBadge}
           </div>
         </div>
       </div>
@@ -442,6 +463,25 @@ function escHtml(s) {
 }
 function fmtPrice(n) {
   return (n == null) ? '—' : Number(n).toLocaleString('uk-UA') + ' ₴';
+}
+
+function parseDishExtras() {
+  const raw = document.getElementById('dishExtras').value || '';
+  const extras = raw
+    .split(',')
+    .map(x => x.trim())
+    .filter(Boolean)
+    .filter((value, index, arr) => arr.indexOf(value) === index)
+    .filter(x => x !== 'рекомендуємо');
+  if (document.getElementById('dishRecommended').checked) extras.unshift('рекомендуємо');
+  return extras;
+}
+
+function formatDishExtras(extras) {
+  return (Array.isArray(extras) ? extras : [])
+    .filter(Boolean)
+    .filter(x => x !== 'рекомендуємо')
+    .join(', ');
 }
 
 // ── Image picker ───────────────────────────────────────────────
@@ -481,6 +521,8 @@ function openDishModal(d) {
   document.getElementById('dishComposition').value   = d?.composition || '';
   document.getElementById('dishPrice').value         = d?.price       ?? '';
   document.getElementById('dishWeight').value        = d?.weight      || '';
+  document.getElementById('dishExtras').value        = formatDishExtras(d?.extras);
+  document.getElementById('dishRecommended').checked = Array.isArray(d?.extras) && d.extras.includes('рекомендуємо');
   document.getElementById('dishImage').value         = d?.image_url   || IMAGE_BASE;
   document.getElementById('dishSort').value          = d?.sort_order  ?? '';
   document.getElementById('dishDeleteBtn').style.display = isEdit ? '' : 'none';
@@ -519,6 +561,7 @@ async function saveDish() {
     composition:  document.getElementById('dishComposition').value.trim() || null,
     price,
     weight:       document.getElementById('dishWeight').value.trim()      || null,
+    extras:       parseDishExtras(),
     category_id:  catId,
     image_url:    document.getElementById('dishImage').value.trim()       || null,
     sort_order:   parseInt(document.getElementById('dishSort').value)     || 0,
@@ -572,6 +615,7 @@ async function duplicateDish() {
     composition: document.getElementById('dishComposition').value.trim() || null,
     price,
     weight:      document.getElementById('dishWeight').value.trim()      || null,
+    extras:      parseDishExtras(),
     category_id: catId,
     image_url:   document.getElementById('dishImage').value.trim()       || null,
     sort_order:  parseInt(document.getElementById('dishSort').value)     || 0,

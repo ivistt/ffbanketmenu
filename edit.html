@@ -1040,9 +1040,10 @@ function printBanquetResult() {
       <div class="sep"></div>
       <div class="stack">${dishesHtml}</div>
       <div class="sep"></div>
-      <div class="meta"><span>Залог</span><b>${fmt(b.deposit)}</b></div>
-      <div class="meta"><span>Загальна сума</span><b>${fmt(b.final)}</b></div>
-      <div class="meta big"><span>Залишилось</span><b>${fmt(Math.max(b.final - b.deposit, 0))}</b></div>
+      <div class="meta"><span>Без обслуговування</span><b>${fmt(b.base)}</b></div>
+      <div class="meta"><span>З обслуговуванням</span><b>${fmt(b.final)}</b></div>
+      ${b.deposit > 0 ? `<div class="meta"><span>Залог</span><b>${fmt(b.deposit)}</b></div>` : ''}
+      ${b.deposit > 0 ? `<div class="meta big"><span>З урахуванням залогу</span><b>${fmt(Math.max(b.final - b.deposit, 0))}</b></div>` : ''}
     </div>
     <script>
       window.onload = () => { window.print(); setTimeout(() => window.close(), 300); };

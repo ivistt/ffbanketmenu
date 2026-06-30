@@ -277,6 +277,10 @@ body { overflow: hidden; }
         <div class="ferr" id="fdep">Введіть суму залогу</div>
       </div>
       <div class="form-group">
+        <label for="f-admin">Адміністратор</label>
+        <input class="form-input" type="text" id="f-admin" placeholder="Ім'я адміністратора" oninput="markDirty()">
+      </div>
+      <div class="form-group">
         <label for="f-comment">Коментар</label>
         <textarea class="form-input" id="f-comment" placeholder="Алергії, тематика, побажання..." style="min-height:64px" oninput="markDirty()"></textarea>
       </div>
@@ -554,6 +558,7 @@ async function init() {
     document.getElementById('f-time').value    = b.time        || '';
     document.getElementById('f-guests').value  = b.guests      || '';
     document.getElementById('f-deposit').value = b.deposit     || '';
+    document.getElementById('f-admin').value   = b.administrator || '';
     document.getElementById('f-comment').value = b.comment     || '';
 
     // Restaurant + Hall
@@ -887,6 +892,7 @@ async function handleSubmit() {
   const hallLabel = getHallLabel(restaurant, hall);
   const guests  = parseInt(document.getElementById('f-guests').value);
   const deposit = parseInt(document.getElementById('f-deposit').value);
+  const administrator = document.getElementById('f-admin').value.trim();
   const comment = document.getElementById('f-comment').value.trim();
   const { base } = calcBase();
   const modAmt  = roundMoney(base * modifier / 100);
@@ -901,6 +907,7 @@ async function handleSubmit() {
       clientId: client.id, clientName: name, clientPhone: phone,
       date, time, restaurant, restaurantLabel, hall, hallLabel,
       guests, deposit, comment,
+      administrator,
       status: selectedStatus,
       modifier, modLabel, totalBase: base, totalFinal: final,
       dishes: sel.map(d => ({ id: d.id, name: d.name, qty: d.qty, price: d.price, categoryId: d.categoryId, categoryName: d.categoryName })),
@@ -908,7 +915,7 @@ async function handleSubmit() {
 
     _isDirty = false;
     document.getElementById('unsavedBar').classList.remove('show');
-    _lastSaved = { name, phone, date, time, restaurantLabel, hallLabel, guests, deposit, final, base, modLabel, modifier, sel };
+    _lastSaved = { name, phone, date, time, restaurantLabel, hallLabel, guests, deposit, final, base, modLabel, modifier, administrator, sel };
 
     document.getElementById('modalSub').textContent = `Банкет "${name}" успішно оновлено`;
     document.getElementById('modalSummary').innerHTML = `
@@ -918,6 +925,7 @@ async function handleSubmit() {
       <b>Зал:</b> ${hallLabel}<br>
       <b>Статус:</b> ${{confirmed:'✅ Підтверджено',pending:'⏳ Очікує',cancelled:'❌ Скасовано'}[selectedStatus]||selectedStatus}<br>
       <b>Гостей:</b> ${guests}<br><b>Залог:</b> ${fmt(deposit)}<br>
+      ${administrator ? `<b>Адміністратор:</b> ${administrator}<br>` : ''}
       <b>Обслуговування:</b> ${modLabel}<br>
       ${comment ? `<b>Коментар:</b> ${comment}<br>` : ''}
       <br><b>Страви:</b><br>${renderGroupedDishSummaryHtml(sel)}<br><br>
@@ -950,6 +958,7 @@ function copyBanquetData() {
     `🏛️ Ресторан: ${s.restaurantLabel}`,
     `🚪 Зал: ${s.hallLabel}`,
     `👥 Гостей: ${s.guests}`,
+    ...(s.administrator ? [`👩‍💼 Адміністратор: ${s.administrator}`] : []),
     ``,
     `🍽️ Страви:`,
     ...buildGroupedDishLines(s.sel, true),
@@ -974,6 +983,7 @@ function copyKitchenData() {
     `🏛️ Ресторан: ${s.restaurantLabel}`,
     `🚪 Зал: ${s.hallLabel}`,
     `👥 Гостей: ${s.guests}`,
+    ...(s.administrator ? [`👩‍💼 Адміністратор: ${s.administrator}`] : []),
     ``,
     `🍽️ Страви:`,
     ...buildGroupedDishLines(s.sel, false),
@@ -1026,6 +1036,7 @@ function printBanquetResult() {
       <div class="meta"><span>Ресторан</span><b>${escapeHtml(b.restaurantLabel)}</b></div>
       <div class="meta"><span>Зал</span><b>${escapeHtml(b.hallLabel)}</b></div>
       <div class="meta"><span>Гостей</span><b>${b.guests}</b></div>
+      ${b.administrator ? `<div class="meta"><span>Адміністратор</span><b>${escapeHtml(b.administrator)}</b></div>` : ''}
       <div class="sep"></div>
       <div class="stack">${dishesHtml}</div>
       <div class="sep"></div>
@@ -1091,34 +1102,24 @@ function findDish(id) {
 }
 const CATEGORY_ORDER = [
   'Холодні закуски',
-  'Гарячі закуски',
   'Салати',
-  'Перші страви',
-  'Супи',
-  'Основні страви',
-  'Гарячі страви',
-  'М\'ясні страви',
-  'Риба та морепродукти',
-  'Гарніри',
-  'Соуси',
-  'Десерти',
-  'Бар'
+  'Гарячі закуски',
+  'Роли',
+  'Тандир',
+  'Напої'
 ];
 function normalizeCategoryName(name) {
   const raw = String(name || '').trim();
   const lower = raw.toLowerCase();
   if (!raw) return 'Інше';
-  if (lower.includes('бар') || lower.includes('напої') || lower.includes('напит')) return 'Бар';
+  if (lower.includes('бар') || lower.includes('напої') || lower.includes('напит')) return 'Напої';
   if (lower.includes('холод')) return 'Холодні закуски';
-  if (lower.includes('гаряч') && lower.includes('закус')) return 'Гарячі закуски';
   if (lower.includes('салат')) return 'Салати';
-  if (lower.includes('суп') || lower.includes('перш')) return 'Перші страви';
-  if (lower.includes('гаряч') || lower.includes('основ')) return 'Гарячі страви';
-  if (lower.includes('м\'яс') || lower.includes('мяс')) return 'М\'ясні страви';
-  if (lower.includes('риб') || lower.includes('морепр')) return 'Риба та морепродукти';
-  if (lower.includes('гарнір')) return 'Гарніри';
-  if (lower.includes('соус')) return 'Соуси';
-  if (lower.includes('десерт')) return 'Десерти';
+  if (lower.includes('гаряч') && lower.includes('закус')) return 'Гарячі закуски';
+  if (lower.includes('хачапур') || lower.includes('пирог') || lower.includes('пиріг') || lower.includes('гарнір')) return 'Гарячі закуски';
+  if (lower.includes('рол')) return 'Роли';
+  if (lower.includes('тандир') || lower.includes('мангал') || (lower.includes('риб') && lower.includes('грил'))) return 'Тандир';
+  if (lower.includes('риб') && lower.includes('мангал')) return 'Тандир';
   return raw;
 }
 function getDishCategoryMetaById(id) {

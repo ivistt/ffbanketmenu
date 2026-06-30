@@ -377,6 +377,10 @@ body { overflow: hidden; }
         <div class="ferr" id="fdep">Введіть суму залогу</div>
       </div>
       <div class="form-group">
+        <label for="f-admin">Адміністратор</label>
+        <input class="form-input" type="text" id="f-admin" placeholder="Ім'я адміністратора" oninput="markDirty()">
+      </div>
+      <div class="form-group">
         <label for="f-comment">Коментар</label>
         <textarea class="form-input" id="f-comment" placeholder="Алергії, тематика, побажання..." style="min-height:64px"></textarea>
       </div>
@@ -837,6 +841,7 @@ async function handleSubmit() {
   const phone=document.getElementById('f-phone').value.trim();
   const date=document.getElementById('f-date').value;
   const time=document.getElementById('f-time').value || '';
+  const administrator=document.getElementById('f-admin').value.trim();
   const restaurant=selectedRestaurant;
   const restaurantLabel=restaurant==='main'?'🏛️ ОГОНЬ Одесса':'🌿 Огонь Дальник';
   const hall=selectedHall;
@@ -854,13 +859,14 @@ async function handleSubmit() {
       clientId:client.id, clientName:name, clientPhone:phone,
       date, time, restaurant, restaurantLabel, hall, hallLabel,
       guests, deposit, comment,
+      administrator,
       modifier, modLabel, totalBase:base, totalFinal:final,
       status:'confirmed',
       dishes:sel.map(d=>({id:d.id,name:d.name,qty:d.qty,price:d.price,categoryId:d.categoryId,categoryName:d.categoryName})),
     });
 
     _isDirty = false; // скидаємо після успішного збереження
-    _lastBanquet = { name, phone, date, time, restaurantLabel, hallLabel, guests, deposit, final, base, modLabel, modifier, sel };
+    _lastBanquet = { name, phone, date, time, restaurantLabel, hallLabel, guests, deposit, final, base, modLabel, modifier, administrator, sel };
     if (_draftId) {
       db_deleteLocalDraft(_draftId);
       _draftId = '';
@@ -876,6 +882,7 @@ async function handleSubmit() {
       <b>Дата:</b> ${fmtDate(date)}${time?` о ${time}`:''}<br>
       <b>Ресторан:</b> ${restaurantLabel}<br>
       <b>Зал:</b> ${hallLabel}<br><b>Гостей:</b> ${guests}<br>
+      ${administrator?`<b>Адміністратор:</b> ${administrator}<br>`:''}
       <b>Залог:</b> ${fmt(deposit)}<br><b>Обслуговування:</b> ${modLabel}<br>
       ${comment?`<b>Коментар:</b> ${comment}<br>`:''}
       <br><b>Страви:</b><br>${renderGroupedDishSummaryHtml(sel)}<br><br>
@@ -895,7 +902,7 @@ async function handleSubmit() {
 
 function goNew() {
   document.getElementById('modalOverlay').classList.remove('vis');
-  ['f-name','f-phone','f-date','f-time','f-guests','f-deposit','f-comment'].forEach(id=>{document.getElementById(id).value='';document.getElementById(id).classList.remove('err');});
+  ['f-name','f-phone','f-date','f-time','f-guests','f-deposit','f-admin','f-comment'].forEach(id=>{document.getElementById(id).value='';document.getElementById(id).classList.remove('err');});
   document.querySelectorAll('.ferr').forEach(e=>e.classList.remove('show'));
   document.getElementById('clientHint').classList.remove('show');
   selectedRestaurant=getLockedRestaurant() || 'main';
@@ -929,6 +936,7 @@ function copyBanquetData() {
     `🏛️ Ресторан: ${b.restaurantLabel}`,
     `🚪 Зал: ${b.hallLabel}`,
     `👥 Гостей: ${b.guests}`,
+    ...(b.administrator ? [`👩‍💼 Адміністратор: ${b.administrator}`] : []),
     ``,
     `🍽️ Страви:`,
     ...buildGroupedDishLines(b.sel, true),
@@ -954,6 +962,7 @@ function copyKitchenData() {
     `🏛️ Ресторан: ${b.restaurantLabel}`,
     `🚪 Зал: ${b.hallLabel}`,
     `👥 Гостей: ${b.guests}`,
+    ...(b.administrator ? [`👩‍💼 Адміністратор: ${b.administrator}`] : []),
     ``,
     `🍽️ Страви:`,
     ...buildGroupedDishLines(b.sel, false),
@@ -1007,6 +1016,7 @@ function printBanquetResult() {
       <div class="meta"><span>Ресторан</span><b>${escapeHtml(b.restaurantLabel)}</b></div>
       <div class="meta"><span>Зал</span><b>${escapeHtml(b.hallLabel)}</b></div>
       <div class="meta"><span>Гостей</span><b>${b.guests}</b></div>
+      ${b.administrator ? `<div class="meta"><span>Адміністратор</span><b>${escapeHtml(b.administrator)}</b></div>` : ''}
       <div class="sep"></div>
       <div class="stack">${dishesHtml}</div>
       <div class="sep"></div>
@@ -1071,6 +1081,7 @@ function buildDraftPayload() {
     hallLabel: getHallLabel(selectedRestaurant, selectedHall),
     guests,
     deposit,
+    administrator: document.getElementById('f-admin').value.trim(),
     comment: document.getElementById('f-comment').value.trim(),
     modifier,
     modLabel: modifier>0?`+${modifier}%`:modifier<0?`${modifier}%`:'без',
@@ -1111,6 +1122,7 @@ function restoreDraftState() {
   document.getElementById('f-time').value = draft.time || '';
   document.getElementById('f-guests').value = draft.guests || '';
   document.getElementById('f-deposit').value = draft.deposit || '';
+  document.getElementById('f-admin').value = draft.administrator || '';
   document.getElementById('f-comment').value = draft.comment || '';
   selectedRestaurant = getLockedRestaurant() || draft.restaurant || 'main';
   renderHallButtons(selectedRestaurant, draft.hall || Object.keys(HALLS_BY_REST[selectedRestaurant])[0]);
@@ -1143,34 +1155,24 @@ function escapeHtml(s){return String(s || '').replace(/&/g,'&amp;').replace(/</g
 function findDish(id){for(const c of menuData)for(const d of c.dishes)if(d.id===id)return d;return null;}
 const CATEGORY_ORDER = [
   'Холодні закуски',
-  'Гарячі закуски',
   'Салати',
-  'Перші страви',
-  'Супи',
-  'Основні страви',
-  'Гарячі страви',
-  'М\'ясні страви',
-  'Риба та морепродукти',
-  'Гарніри',
-  'Соуси',
-  'Десерти',
-  'Бар'
+  'Гарячі закуски',
+  'Роли',
+  'Тандир',
+  'Напої'
 ];
 function normalizeCategoryName(name) {
   const raw = String(name || '').trim();
   const lower = raw.toLowerCase();
   if (!raw) return 'Інше';
-  if (lower.includes('бар') || lower.includes('напої') || lower.includes('напит')) return 'Бар';
+  if (lower.includes('бар') || lower.includes('напої') || lower.includes('напит')) return 'Напої';
   if (lower.includes('холод')) return 'Холодні закуски';
-  if (lower.includes('гаряч') && lower.includes('закус')) return 'Гарячі закуски';
   if (lower.includes('салат')) return 'Салати';
-  if (lower.includes('суп') || lower.includes('перш')) return 'Перші страви';
-  if (lower.includes('гаряч') || lower.includes('основ')) return 'Гарячі страви';
-  if (lower.includes('м\'яс') || lower.includes('мяс')) return 'М\'ясні страви';
-  if (lower.includes('риб') || lower.includes('морепр')) return 'Риба та морепродукти';
-  if (lower.includes('гарнір')) return 'Гарніри';
-  if (lower.includes('соус')) return 'Соуси';
-  if (lower.includes('десерт')) return 'Десерти';
+  if (lower.includes('гаряч') && lower.includes('закус')) return 'Гарячі закуски';
+  if (lower.includes('хачапур') || lower.includes('пирог') || lower.includes('пиріг') || lower.includes('гарнір')) return 'Гарячі закуски';
+  if (lower.includes('рол')) return 'Роли';
+  if (lower.includes('тандир') || lower.includes('мангал') || (lower.includes('риб') && lower.includes('грил'))) return 'Тандир';
+  if (lower.includes('риб') && lower.includes('мангал')) return 'Тандир';
   return raw;
 }
 function getDishCategoryMetaById(id) {

@@ -225,6 +225,10 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
               <span class="info-key">Залог (₴)</span>
               <input class="inline-input" type="number" id="e-deposit" min="0" style="max-width:130px">
             </div>
+            <div class="info-row">
+              <span class="info-key">Адміністратор</span>
+              <input class="inline-input" type="text" id="e-admin" placeholder="Ім'я адміністратора">
+            </div>
             <div class="info-row" style="align-items:flex-start">
               <span class="info-key" style="padding-top:8px">Коментар</span>
               <textarea class="inline-input" id="e-comment" style="max-width:100%;margin-left:auto" placeholder="Тематика, алергії..."></textarea>
@@ -422,6 +426,7 @@ async function renderView() {
     <div class="info-row"><span class="info-key">Зал</span><span class="info-val">${b.hallLabel || HALLS[b.hall] || '—'}</span></div>
     <div class="info-row"><span class="info-key">Гостей</span><span class="info-val">👥 ${b.guests}</span></div>
     <div class="info-row"><span class="info-key">Залог</span><span class="info-val">${fmt(b.deposit)}</span></div>
+    ${b.administrator ? `<div class="info-row"><span class="info-key">Адміністратор</span><span class="info-val">${b.administrator}</span></div>` : ''}
     ${b.comment ? `<div class="info-row"><span class="info-key">Коментар</span><span class="info-val" style="font-weight:500;font-size:12px;max-width:200px;text-align:right;line-height:1.45">${b.comment}</span></div>` : ''}
     <div class="info-row"><span class="info-key">Створено</span><span class="info-val" style="font-weight:500;color:var(--text-dim)">${b.createdAt ? new Date(b.createdAt).toLocaleDateString('uk-UA') : '—'}</span></div>
   `;
@@ -476,10 +481,11 @@ function startEdit() {
   document.getElementById('e-time').value    = b.time        || '';
   document.getElementById('e-guests').value  = b.guests      || '';
   document.getElementById('e-deposit').value = b.deposit     || '';
+  document.getElementById('e-admin').value   = b.administrator || '';
   document.getElementById('e-comment').value = b.comment     || '';
 
   // Attach dirty listeners to text inputs
-  ['e-name','e-phone','e-date','e-time','e-guests','e-deposit','e-comment'].forEach(id => {
+  ['e-name','e-phone','e-date','e-time','e-guests','e-deposit','e-admin','e-comment'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', () => { markEditDirty(); if (id === 'e-guests') recalc(); }, { once: false });
   });
@@ -656,6 +662,7 @@ async function saveAll() {
   const time    = document.getElementById('e-time').value || '';
   const guests  = parseInt(document.getElementById('e-guests').value);
   const deposit = parseInt(document.getElementById('e-deposit').value) || 0;
+  const administrator = document.getElementById('e-admin').value.trim();
   const comment = document.getElementById('e-comment').value.trim();
 
   if (!name || !phone || !date || !guests) {
@@ -687,6 +694,7 @@ async function saveAll() {
       time,
       guests,
       deposit,
+      administrator,
       comment,
       hall:        eHall,
       hallLabel:   HALLS[eHall] || eHall,
@@ -726,35 +734,25 @@ function findDishIdByName(name) {
 
 const CATEGORY_ORDER = [
   'Холодні закуски',
-  'Гарячі закуски',
   'Салати',
-  'Перші страви',
-  'Супи',
-  'Основні страви',
-  'Гарячі страви',
-  'М\'ясні страви',
-  'Риба та морепродукти',
-  'Гарніри',
-  'Соуси',
-  'Десерти',
-  'Бар'
+  'Гарячі закуски',
+  'Роли',
+  'Тандир',
+  'Напої'
 ];
 
 function normalizeCategoryName(name) {
   const raw = String(name || '').trim();
   const lower = raw.toLowerCase();
   if (!raw) return 'Інше';
-  if (lower.includes('бар') || lower.includes('напої') || lower.includes('напит')) return 'Бар';
+  if (lower.includes('бар') || lower.includes('напої') || lower.includes('напит')) return 'Напої';
   if (lower.includes('холод')) return 'Холодні закуски';
-  if (lower.includes('гаряч') && lower.includes('закус')) return 'Гарячі закуски';
   if (lower.includes('салат')) return 'Салати';
-  if (lower.includes('суп') || lower.includes('перш')) return 'Перші страви';
-  if (lower.includes('гаряч') || lower.includes('основ')) return 'Гарячі страви';
-  if (lower.includes('м\'яс') || lower.includes('мяс')) return 'М\'ясні страви';
-  if (lower.includes('риб') || lower.includes('морепр')) return 'Риба та морепродукти';
-  if (lower.includes('гарнір')) return 'Гарніри';
-  if (lower.includes('соус')) return 'Соуси';
-  if (lower.includes('десерт')) return 'Десерти';
+  if (lower.includes('гаряч') && lower.includes('закус')) return 'Гарячі закуски';
+  if (lower.includes('хачапур') || lower.includes('пирог') || lower.includes('пиріг') || lower.includes('гарнір')) return 'Гарячі закуски';
+  if (lower.includes('рол')) return 'Роли';
+  if (lower.includes('тандир') || lower.includes('мангал') || (lower.includes('риб') && lower.includes('грил'))) return 'Тандир';
+  if (lower.includes('риб') && lower.includes('мангал')) return 'Тандир';
   return raw;
 }
 

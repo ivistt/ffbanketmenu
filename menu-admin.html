@@ -311,6 +311,7 @@
 let categories = [], dishes = [];
 let activeCatId  = null;
 let statusFilter = 'all';
+const RECOMMENDED_CAT_ID = '__recommended__';
 
 // Зберігаємо об'єкти окремо — не передаємо JSON в onclick
 const _dishMap = new Map();
@@ -354,10 +355,16 @@ async function loadAll() {
 function renderCats() {
   const countMap = {};
   dishes.forEach(d => { countMap[d.category_id] = (countMap[d.category_id] || 0) + 1; });
+  const recommendedCount = dishes.filter(d => Array.isArray(d.extras) && d.extras.includes('рекомендуємо')).length;
 
   let html = `<div class="cat-item ${activeCatId === null ? 'active' : ''}" onclick="selectCat(null)">
     <span>🍽</span><span class="cat-item-name">Всі страви</span>
     <span class="cat-item-count">${dishes.length}</span>
+  </div>`;
+
+  html += `<div class="cat-item ${activeCatId === RECOMMENDED_CAT_ID ? 'active' : ''}" onclick="selectCat('${RECOMMENDED_CAT_ID}')">
+    <span>⭐</span><span class="cat-item-name">Рекомендації</span>
+    <span class="cat-item-count">${recommendedCount}</span>
   </div>`;
 
   categories.forEach(c => {
@@ -383,7 +390,11 @@ function renderCats() {
 function selectCat(id) {
   activeCatId = id;
   document.getElementById('dishesTitle').textContent =
-    id === null ? 'Всі страви' : (categories.find(c => c.id === id)?.name || 'Страви');
+    id === null
+      ? 'Всі страви'
+      : id === RECOMMENDED_CAT_ID
+        ? 'Рекомендації'
+        : (categories.find(c => c.id === id)?.name || 'Страви');
   renderCats();
   applyFilter();
 }
@@ -399,7 +410,11 @@ function setStatusFilter(btn) {
 function applyFilter() {
   const q = (document.getElementById('searchInput').value || '').toLowerCase();
   let list = dishes;
-  if (activeCatId !== null) list = list.filter(d => d.category_id === activeCatId);
+  if (activeCatId === RECOMMENDED_CAT_ID) {
+    list = list.filter(d => Array.isArray(d.extras) && d.extras.includes('рекомендуємо'));
+  } else if (activeCatId !== null) {
+    list = list.filter(d => d.category_id === activeCatId);
+  }
   if (q) list = list.filter(d => (d.name || '').toLowerCase().includes(q));
   renderDishes(list);
 }

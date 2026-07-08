@@ -218,15 +218,7 @@
 
       <div class="field">
         <label class="field-label">Категорія для друку</label>
-        <select class="field-select" id="dishPrintCategory">
-          <option value="">Як основна категорія</option>
-          <option value="Холодні закуски">Холодні закуски</option>
-          <option value="Салати">Салати</option>
-          <option value="Гарячі закуски">Гарячі закуски</option>
-          <option value="Роли">Роли</option>
-          <option value="Тандир">Тандир</option>
-          <option value="Напої">Напої</option>
-        </select>
+        <select class="field-select" id="dishPrintCategory"></select>
       </div>
 
       <div class="field">
@@ -516,6 +508,17 @@ function formatDishExtras(extras) {
     .join(', ');
 }
 
+function fillPrintCategoryOptions(selectedValue = '') {
+  const sel = document.getElementById('dishPrintCategory');
+  const values = categories.map(c => c.name).filter(Boolean);
+  if (selectedValue && !values.includes(selectedValue)) values.push(selectedValue);
+  sel.innerHTML = [
+    '<option value="">Як основна категорія</option>',
+    ...values.map(name => `<option value="${escHtml(name)}">${escHtml(name)}</option>`)
+  ].join('');
+  sel.value = selectedValue || '';
+}
+
 // ── Image picker ───────────────────────────────────────────────
 const IMAGE_BASE = '/ffmenu/images/';
 
@@ -553,7 +556,6 @@ function openDishModal(d) {
   document.getElementById('dishComposition').value   = d?.composition || '';
   document.getElementById('dishPrice').value         = d?.price       ?? '';
   document.getElementById('dishWeight').value        = d?.weight      || '';
-  document.getElementById('dishPrintCategory').value = d?.print_category || '';
   document.getElementById('dishExtras').value        = formatDishExtras(d?.extras);
   document.getElementById('dishRecommended').checked = Array.isArray(d?.extras) && d.extras.includes('рекомендуємо');
   document.getElementById('dishImage').value         = d?.image_url   || IMAGE_BASE;
@@ -573,6 +575,7 @@ function openDishModal(d) {
   sel.innerHTML = categories.length
     ? categories.map(c => `<option value="${c.id}" ${d?.category_id === c.id ? 'selected' : ''}>${escHtml((c.icon||'') + ' ' + c.name)}</option>`).join('')
     : '<option value="">— спочатку додайте категорію —</option>';
+  fillPrintCategoryOptions(d?.print_category || '');
 
   previewImg();
   openModal('dishModalBg');

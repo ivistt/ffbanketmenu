@@ -360,6 +360,7 @@ async function db_getClientStats(clientId) {
    CREATE TABLE menu_dishes (
      id          text PRIMARY KEY,
      category_id text REFERENCES menu_categories(id),
+     print_category text,
      name        text,
      description text,
      composition text,
@@ -398,6 +399,7 @@ async function db_getMenu() {
             composition: d.composition || '',
             price:       d.price       || 0,
             weight:      d.weight      || '',
+            print_category: d.print_category || '',
             extras:      Array.isArray(d.extras) ? d.extras : [],
             image_url:   d.image_url   || '',
             where:       d.where       || '',

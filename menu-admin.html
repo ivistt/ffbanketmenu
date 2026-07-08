@@ -217,6 +217,19 @@
       </div>
 
       <div class="field">
+        <label class="field-label">Категорія для друку</label>
+        <select class="field-select" id="dishPrintCategory">
+          <option value="">Як основна категорія</option>
+          <option value="Холодні закуски">Холодні закуски</option>
+          <option value="Салати">Салати</option>
+          <option value="Гарячі закуски">Гарячі закуски</option>
+          <option value="Роли">Роли</option>
+          <option value="Тандир">Тандир</option>
+          <option value="Напої">Напої</option>
+        </select>
+      </div>
+
+      <div class="field">
         <label class="field-label">Extra</label>
         <input class="field-input" id="dishExtras" type="text" placeholder="Наприклад: новинка, гостре">
         <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Через кому. Тег "рекомендуємо" можна вмикати окремою галочкою нижче.</div>
@@ -443,6 +456,9 @@ function renderDishes(list) {
     const recommendedBadge = Array.isArray(d.extras) && d.extras.includes('рекомендуємо')
       ? `<span class="badge badge-active">Рекомендація</span>`
       : '';
+    const printCategoryBadge = d.print_category
+      ? `<span class="badge badge-cat">Друк: ${escHtml(d.print_category)}</span>`
+      : '';
     const extrasMeta = Array.isArray(d.extras) && d.extras.length
       ? `<div class="dish-meta">✨ ${escHtml(formatDishExtras(d.extras) || 'рекомендуємо')}</div>`
       : '';
@@ -458,6 +474,7 @@ function renderDishes(list) {
           <div class="dish-price">${fmtPrice(d.price)}</div>
           <div class="dish-badges">
             ${cat ? `<span class="badge badge-cat">${escHtml((cat.icon||'') + ' ' + cat.name)}</span>` : ''}
+            ${printCategoryBadge}
             ${whereBadge}
             ${restaurantBadge}
             ${recommendedBadge}
@@ -536,6 +553,7 @@ function openDishModal(d) {
   document.getElementById('dishComposition').value   = d?.composition || '';
   document.getElementById('dishPrice').value         = d?.price       ?? '';
   document.getElementById('dishWeight').value        = d?.weight      || '';
+  document.getElementById('dishPrintCategory').value = d?.print_category || '';
   document.getElementById('dishExtras').value        = formatDishExtras(d?.extras);
   document.getElementById('dishRecommended').checked = Array.isArray(d?.extras) && d.extras.includes('рекомендуємо');
   document.getElementById('dishImage').value         = d?.image_url   || IMAGE_BASE;
@@ -576,6 +594,7 @@ async function saveDish() {
     composition:  document.getElementById('dishComposition').value.trim() || null,
     price,
     weight:       document.getElementById('dishWeight').value.trim()      || null,
+    print_category: document.getElementById('dishPrintCategory').value || null,
     extras:       parseDishExtras(),
     category_id:  catId,
     image_url:    document.getElementById('dishImage').value.trim()       || null,
@@ -630,6 +649,7 @@ async function duplicateDish() {
     composition: document.getElementById('dishComposition').value.trim() || null,
     price,
     weight:      document.getElementById('dishWeight').value.trim()      || null,
+    print_category: document.getElementById('dishPrintCategory').value || null,
     extras:      parseDishExtras(),
     category_id: catId,
     image_url:   document.getElementById('dishImage').value.trim()       || null,

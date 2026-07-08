@@ -680,7 +680,7 @@ async function saveAll() {
   const modAmt   = Math.round(base * eMod / 100);
   const final    = base + modAmt;
   const modLabel = eMod > 0 ? `+${eMod}%` : eMod < 0 ? `${eMod}%` : 'без';
-  const dishes   = allSelected.map(d => ({ id: d.id, name: d.name, qty: d.qty, price: d.price, categoryId: d.categoryId, categoryName: d.categoryName }));
+  const dishes   = allSelected.map(d => ({ id: d.id, name: d.name, qty: d.qty, price: d.price, categoryId: d.categoryId, categoryName: d.categoryName, printCategoryName: d.printCategoryName }));
 
   const btn = document.getElementById('btnSaveAll');
   btn.disabled = true;
@@ -757,12 +757,22 @@ function normalizeCategoryName(name) {
 }
 
 function getDishCategoryMeta(dish) {
-  if (dish.categoryName) return { categoryId: dish.categoryId || '', categoryName: normalizeCategoryName(dish.categoryName) };
+  if (dish.categoryName || dish.printCategoryName) {
+    return {
+      categoryId: dish.categoryId || '',
+      categoryName: normalizeCategoryName(dish.categoryName),
+      printCategoryName: dish.printCategoryName ? normalizeCategoryName(dish.printCategoryName) : ''
+    };
+  }
   for (const cat of menuData) {
     const found = (cat.dishes || []).find(d => d.id === dish.id || d.name === dish.name);
-    if (found) return { categoryId: cat.id || '', categoryName: normalizeCategoryName(cat.name) };
+    if (found) return {
+      categoryId: cat.id || '',
+      categoryName: normalizeCategoryName(cat.name),
+      printCategoryName: found.print_category ? normalizeCategoryName(found.print_category) : ''
+    };
   }
-  return { categoryId: '', categoryName: 'Інше' };
+  return { categoryId: '', categoryName: 'Інше', printCategoryName: '' };
 }
 
 function enrichDishesWithCategories(dishes) {
@@ -772,7 +782,7 @@ function enrichDishesWithCategories(dishes) {
 function groupDishesByCategory(dishes) {
   const groups = [];
   dishes.forEach(dish => {
-    const categoryName = normalizeCategoryName(dish.categoryName);
+    const categoryName = normalizeCategoryName(dish.printCategoryName || dish.categoryName);
     let group = groups.find(g => g.name === categoryName);
     if (!group) {
       group = { name: categoryName, dishes: [] };

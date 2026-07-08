@@ -910,7 +910,7 @@ async function handleSubmit() {
       administrator,
       status: selectedStatus,
       modifier, modLabel, totalBase: base, totalFinal: final,
-      dishes: sel.map(d => ({ id: d.id, name: d.name, qty: d.qty, price: d.price, categoryId: d.categoryId, categoryName: d.categoryName })),
+      dishes: sel.map(d => ({ id: d.id, name: d.name, qty: d.qty, price: d.price, categoryId: d.categoryId, categoryName: d.categoryName, printCategoryName: d.printCategoryName })),
     });
 
     _isDirty = false;
@@ -1126,9 +1126,13 @@ function normalizeCategoryName(name) {
 function getDishCategoryMetaById(id) {
   for (const cat of menuData) {
     const found = (cat.dishes || []).find(d => d.id === id);
-    if (found) return { categoryId: cat.id || '', categoryName: normalizeCategoryName(cat.name) };
+    if (found) return {
+      categoryId: cat.id || '',
+      categoryName: normalizeCategoryName(cat.name),
+      printCategoryName: found.print_category ? normalizeCategoryName(found.print_category) : ''
+    };
   }
-  return { categoryId: '', categoryName: 'Інше' };
+  return { categoryId: '', categoryName: 'Інше', printCategoryName: '' };
 }
 function getSel() {
   return selectionOrder
@@ -1144,7 +1148,7 @@ function getSel() {
 function groupDishesByCategory(dishes) {
   const groups = [];
   dishes.forEach(dish => {
-    const categoryName = normalizeCategoryName(dish.categoryName);
+    const categoryName = normalizeCategoryName(dish.printCategoryName || dish.categoryName);
     let group = groups.find(g => g.name === categoryName);
     if (!group) {
       group = { name: categoryName, dishes: [] };

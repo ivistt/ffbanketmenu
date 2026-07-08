@@ -430,6 +430,18 @@ let _lastSaved  = null;
 let _origBanquet = null;
 let menuSearchQuery = '';
 const USER_SCOPE = db_getCurrentRestaurantScope();
+const BANQUET_TERMS = [
+  'Мінімальне замовлення по меню від 900 грн. з людини.',
+  'Обслуговування +10% офіціантам.',
+  'Розрахунок тільки готівкою.',
+  'Бокси для упакування їжі є в наявності — 8 грн. шт. (Обов\'язкове замовлення напою нашого виробництва на вибір: компот/лимонад/узвар).',
+  'Конфетті гостей (400 грн. прибирання).',
+  'Ресторан працює кожен день з 10:00 до 22:00 (О 21:30 офіціанти починають збирати банкети).',
+  'Жива музика з 17:30 до 20:30.',
+  'Продовження музики: 1 година 1000 грн.',
+  'У нашому закладі діє правило: жодної російської музики.',
+  'Ми дбаємо про ваш комфорт та створюємо правильну атмосферу. У нас лунає виключно якісна українська та світова музика. Дякуємо за розуміння! 🇺🇦✨'
+];
 
 const HALLS_BY_REST = {
   main: {
@@ -915,7 +927,7 @@ async function handleSubmit() {
 
     _isDirty = false;
     document.getElementById('unsavedBar').classList.remove('show');
-    _lastSaved = { name, phone, date, time, restaurantLabel, hallLabel, guests, deposit, final, base, modLabel, modifier, administrator, sel };
+    _lastSaved = { name, phone, date, time, restaurantLabel, hallLabel, guests, deposit, final, base, modLabel, modifier, administrator, comment, sel };
 
     document.getElementById('modalSub').textContent = `Банкет "${name}" успішно оновлено`;
     document.getElementById('modalSummary').innerHTML = `
@@ -959,15 +971,17 @@ function copyBanquetData() {
     `🚪 Зал: ${s.hallLabel}`,
     `👥 Гостей: ${s.guests}`,
     ...(s.administrator ? [`👩‍💼 Адміністратор: ${s.administrator}`] : []),
+    ...(s.comment ? [`📝 Коментар: ${s.comment}`] : []),
     ``,
     `🍽️ Страви:`,
     ...buildGroupedDishLines(s.sel, true),
     ``,
-    `💰 Залог: ${s.deposit} ₴`,
+    ...BANQUET_TERMS,
+    ``,
+    `💵 Загальна ціна за страви: ${s.base} ₴`,
   ];
-  if (s.modifier !== 0) lines.push(`📊 Обслуговування: ${s.modLabel}`);
-  lines.push(`💵 Загальна сума: ${s.final} ₴`);
-  lines.push(`💳 Залишилось: ${Math.max(s.final - s.deposit, 0)} ₴`);
+  lines.push(`📊 Загальна ціна за страви + обслуговування: ${s.final} ₴`);
+  lines.push(`💳 Загальна ціна з урахуванням залогу: ${Math.max(s.final - s.deposit, 0)} ₴`);
 
   copyTextWithFeedback(lines.join('\n'), 'copyBtn', '📋 Скопіювати дані банкету');
 }
@@ -984,9 +998,12 @@ function copyKitchenData() {
     `🚪 Зал: ${s.hallLabel}`,
     `👥 Гостей: ${s.guests}`,
     ...(s.administrator ? [`👩‍💼 Адміністратор: ${s.administrator}`] : []),
+    ...(s.comment ? [`📝 Коментар: ${s.comment}`] : []),
     ``,
     `🍽️ Страви:`,
     ...buildGroupedDishLines(s.sel, false),
+    ``,
+    ...BANQUET_TERMS,
   ];
 
   copyTextWithFeedback(lines.join('\n'), 'copyKitchenBtn', '🍽️ Скопіювати на кухню');
@@ -1017,13 +1034,13 @@ function printBanquetResult() {
     <meta charset="UTF-8">
     <title>Друк банкету</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 0; padding: 18px; color: #111; }
+      body { font-family: Arial, sans-serif; margin: 0; padding: 12px; color: #111; font-size: 12px; line-height: 1.25; }
       .wrap { max-width: 360px; margin: 0 auto; }
-      h1 { font-size: 18px; margin: 0 0 12px; }
-      .meta, .row { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0; }
-      .stack { margin: 12px 0; }
-      .sep { border-top: 1px dashed #999; margin: 12px 0; }
-      .big { font-size: 16px; font-weight: 700; }
+      h1 { font-size: 15px; margin: 0 0 10px; }
+      .meta, .row { display: flex; justify-content: space-between; gap: 10px; margin: 4px 0; font-size: 12px; }
+      .stack { margin: 8px 0; }
+      .sep { border-top: 1px dashed #999; margin: 8px 0; }
+      .big { font-size: 13px; font-weight: 700; }
       @media print { body { padding: 0; } .wrap { max-width: none; } }
     </style>
   </head>
@@ -1037,13 +1054,17 @@ function printBanquetResult() {
       <div class="meta"><span>Зал</span><b>${escapeHtml(b.hallLabel)}</b></div>
       <div class="meta"><span>Гостей</span><b>${b.guests}</b></div>
       ${b.administrator ? `<div class="meta"><span>Адміністратор</span><b>${escapeHtml(b.administrator)}</b></div>` : ''}
+      ${b.comment ? `<div class="meta"><span>Коментар</span><b>${escapeHtml(b.comment)}</b></div>` : ''}
       <div class="sep"></div>
       <div class="stack">${dishesHtml}</div>
       <div class="sep"></div>
-      <div class="meta"><span>Без обслуговування</span><b>${fmt(b.base)}</b></div>
-      <div class="meta"><span>З обслуговуванням</span><b>${fmt(b.final)}</b></div>
-      ${b.deposit > 0 ? `<div class="meta"><span>Залог</span><b>${fmt(b.deposit)}</b></div>` : ''}
-      ${b.deposit > 0 ? `<div class="meta big"><span>З урахуванням залогу</span><b>${fmt(Math.max(b.final - b.deposit, 0))}</b></div>` : ''}
+      <div class="stack">
+        ${BANQUET_TERMS.map(line => `<div class="muted" style="margin:3px 0">${escapeHtml(line)}</div>`).join('')}
+      </div>
+      <div class="sep"></div>
+      <div class="meta"><span>Загальна ціна за страви</span><b>${fmt(b.base)}</b></div>
+      <div class="meta"><span>Загальна ціна за страви + обслуговування</span><b>${fmt(b.final)}</b></div>
+      <div class="meta big"><span>Загальна ціна з урахуванням залогу</span><b>${fmt(Math.max(b.final - b.deposit, 0))}</b></div>
     </div>
     <script>
       window.onload = () => { window.print(); setTimeout(() => window.close(), 300); };

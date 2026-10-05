@@ -981,8 +981,6 @@ function copyKitchenData() {
     ``,
     `🍽️ Страви:`,
     ...buildGroupedDishLines(b.sel, false),
-    ``,
-    ...BANQUET_TERMS,
   ];
 
   copyTextWithFeedback(lines.join('\n'), 'copyKitchenBtn', '🍽️ Скопіювати на кухню');

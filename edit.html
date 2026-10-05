@@ -331,6 +331,7 @@ body { overflow: hidden; }
       <div class="tot-note"><ul><li>Мінімальне замовлення по меню від 900 грн. з людини.</li><li>Обслуговування +10% офіціантам.</li><li>Розрахунок тільки готівкою.</li><li>Бокси для упакування їжі є в наявності — 8 грн. шт. (Обов'язкове замовлення напою нашого виробництва на вибір: компот/лимонад/узвар).</li><li>Конфетті гостей (400 грн. прибирання).</li><li>Ресторан працює кожен день з 10:00 до 22:00 (О 21:30 офіціанти починають збирати банкети).</li><li>Жива музика з 17:30 до 20:30.</li><li>Продовження музики: 1 година 1000 грн.</li></ul></div>
     </div>
 
+    <button class="btn-ghost" onclick="refreshMenuPrices()">Оновити ціни з меню</button>
     <button class="btn-submit" id="submitBtn" onclick="handleSubmit()">💾 Зберегти зміни</button>
   </div>
 
@@ -420,6 +421,7 @@ db_seed(); renderOfflineBanner();
 /* ── STATE ── */
 const BID = getParam('id');
 let menuData    = [];
+let currentMenuData = [];
 let quantities  = {};
 let selectionOrder = [];
 let modifier    = 0;
@@ -636,6 +638,8 @@ async function loadMenu(savedDishes = []) {
     ]}];
   }
 
+  currentMenuData = menuData;
+  menuData = db_menuWithBanquetPrices(currentMenuData, savedDishes);
   // Pre-fill quantities from saved dishes (match by id, fallback by name)
   quantities = {};
   selectionOrder = [];
@@ -655,6 +659,19 @@ async function loadMenu(savedDishes = []) {
   renderMenu();
   calcTotals();
   calcSummary();
+}
+
+async function refreshMenuPrices() {
+  if (!confirm('Оновити ціни всіх страв банкету за актуальним меню? Загальна сума зміниться. Зміни набудуть чинності після збереження.')) return;
+  _menuCache = null;
+  const latest = await db_getMenu();
+  if (!latest.length) { showToast('Не вдалося завантажити актуальне меню'); return; }
+  currentMenuData = latest;
+  db_refreshBanquetPrices(menuData, currentMenuData);
+  renderMenu();
+  calcTotals();
+  calcSummary();
+  markDirty();
 }
 
 function renderMenu() {
@@ -1002,8 +1019,6 @@ function copyKitchenData() {
     ``,
     `🍽️ Страви:`,
     ...buildGroupedDishLines(s.sel, false),
-    ``,
-    ...BANQUET_TERMS,
   ];
 
   copyTextWithFeedback(lines.join('\n'), 'copyKitchenBtn', '🍽️ Скопіювати на кухню');

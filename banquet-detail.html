@@ -288,6 +288,7 @@ textarea.inline-input { max-width: 100%; text-align: left; resize: vertical; min
         <!-- ACTION BAR -->
         <div class="edit-action-bar edit-only" style="display:none">
           <button class="btn-cancel-edit" onclick="cancelEdit()">Скасувати</button>
+          <button class="btn-cancel-edit" onclick="refreshMenuPrices()">Оновити ціни з меню</button>
           <button class="btn-save-all" id="btnSaveAll" onclick="saveAll()">💾 Зберегти всі зміни</button>
         </div>
       </div>
@@ -328,6 +329,7 @@ const BID    = getParam('id');
 let b        = null;
 let editMode = false;
 let menuData = [];
+let currentMenuData = [];
 let eQty     = {};
 let eMod     = 0;
 let eStatus  = '';
@@ -391,6 +393,7 @@ async function loadMenuThenRender() {
       {id:'d6',name:'Канада',price:410,weight:'270г',extras:[],image_url:''},
     ]}];
   }
+  currentMenuData = menuData;
   await renderView();
   setMode('view');
   document.getElementById('detailGrid').style.display = 'block';
@@ -460,6 +463,7 @@ function renderDishTotal() {
 }
 
 function startEdit() {
+  menuData = db_menuWithBanquetPrices(currentMenuData, b.dishes || []);
   editMode    = true;
   _editDirty  = false;
   // Map legacy 'pending' to 'confirmed' since pending is no longer a user-settable status
@@ -470,7 +474,7 @@ function startEdit() {
 
   // Pre-fill quantities from saved dishes, matching by id then name
   (b.dishes || []).forEach(d => {
-    const realId = findDishIdByName(d.name) || d.id;
+    const realId = (findDishById(d.id) ? d.id : findDishIdByName(d.name)) || d.id;
     if (realId) eQty[realId] = d.qty;
   });
 
@@ -550,6 +554,19 @@ function pickEditHall(hall) {
     const btn = document.getElementById('e-hall-' + h);
     if (btn) btn.setAttribute('style', h === hall ? onStyle : offStyle);
   });
+  markEditDirty();
+}
+
+async function refreshMenuPrices() {
+  if (!confirm('Оновити ціни всіх страв банкету за актуальним меню? Загальна сума зміниться. Зміни набудуть чинності після збереження.')) return;
+  _menuCache = null;
+  const latest = await db_getMenu();
+  if (!latest.length) { showToast('Не вдалося завантажити актуальне меню'); return; }
+  currentMenuData = latest;
+  db_refreshBanquetPrices(menuData, currentMenuData);
+  renderEditDishes();
+  recalc();
+  renderDishTotal();
   markEditDirty();
 }
 

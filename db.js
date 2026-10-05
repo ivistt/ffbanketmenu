@@ -375,6 +375,31 @@ async function db_getClientStats(clientId) {
    -- Disable RLS для обох таблиць
 ══════════════════════════════════════════════════════════════ */
 
+// Keep banquet prices independent of the shared menu cache.
+function db_menuWithBanquetPrices(menu, savedDishes) {
+  const copy = menu.map(cat => ({ ...cat, dishes: cat.dishes.map(d => ({ ...d })) }));
+  const all = copy.flatMap(cat => cat.dishes);
+  const archived = [];
+  for (const saved of savedDishes) {
+    const dish = all.find(d => d.id === saved.id) || all.find(d => d.name === saved.name);
+    if (dish) {
+      if (saved.price != null && Number.isFinite(Number(saved.price))) dish.price = Number(saved.price);
+    } else {
+      archived.push({ ...saved, extras: [], restaurant: '', weight: saved.weight || '' });
+    }
+  }
+  if (archived.length) copy.push({ id: '__saved__', name: 'Збережені страви', dishes: archived });
+  return copy;
+}
+
+function db_refreshBanquetPrices(menu, currentMenu) {
+  const current = currentMenu.flatMap(cat => cat.dishes);
+  for (const cat of menu) for (const dish of cat.dishes) {
+    const latest = current.find(d => d.id === dish.id) || current.find(d => d.name === dish.name);
+    if (latest) dish.price = latest.price;
+  }
+}
+
 let _menuCache = null;
 
 async function db_getMenu() {

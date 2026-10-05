@@ -7,7 +7,9 @@
    3. Settings → Variables and Secrets:
         SUPABASE_URL  (Type: Text)    = https://xxxxx.supabase.co
         SUPABASE_KEY  (Type: Secret)  = eyJ...anon key...
-        APP_PASSWORD  (Type: Secret)  = твій_пароль_для_входу
+        APP_PASSWORD_MAIN    (Type: Secret) = пароль для Основа
+        APP_PASSWORD_DALNYK  (Type: Secret) = пароль для Дальник
+        APP_PASSWORD         (Type: Secret) = optional legacy/admin password
    4. Скопіюй URL воркера → встав у db.js в API_URL
       і в auth.js в WORKER_URL (той самий URL + /auth)
 
@@ -35,8 +37,8 @@ export default {
       return handlePublicMenu(request, env);
     }
 
-    const authError = await verifyToken(request, env);
-    if (authError) return corsResponse(authError);
+    const auth = await verifyToken(request, env);
+    if (auth.error) return corsResponse(auth.error);
 
     const override = request.headers.get('X-HTTP-Method-Override');
     const effectiveMethod = override || request.method;
@@ -53,6 +55,30 @@ export default {
       const sbUrl = new URL(`${env.SUPABASE_URL}/rest/v1/${route}`);
       url.searchParams.forEach((v, k) => sbUrl.searchParams.set(k, v));
 
+      let requestText = '';
+      let requestJson = null;
+      if (['POST', 'PATCH'].includes(request.method)) {
+        requestText = await request.text();
+        if (requestText) {
+          try {
+            requestJson = JSON.parse(requestText);
+          } catch {
+            return corsResponse(json({ error: 'invalid_json' }, 400));
+          }
+        }
+      }
+
+      if (route === 'banquets' && auth.scope !== 'all') {
+        if (['GET', 'PATCH', 'DELETE'].includes(effectiveMethod)) {
+          sbUrl.searchParams.set('restaurant', `eq.${auth.scope}`);
+        }
+        if (['POST', 'PATCH'].includes(effectiveMethod)) {
+          const nextBody = requestJson && typeof requestJson === 'object' ? requestJson : {};
+          nextBody.restaurant = auth.scope;
+          requestText = JSON.stringify(nextBody);
+        }
+      }
+
       const sbRequest = new Request(sbUrl.toString(), {
         method: effectiveMethod,
         headers: {
@@ -61,7 +87,7 @@ export default {
           'Authorization': 'Bearer ' + env.SUPABASE_KEY,
           'Prefer': request.headers.get('Prefer') || 'return=representation',
         },
-        body: ['POST', 'PATCH'].includes(effectiveMethod) ? request.body : undefined,
+        body: ['POST', 'PATCH'].includes(effectiveMethod) ? requestText : undefined,
       });
 
       const sbRes = await fetch(sbRequest);
@@ -158,17 +184,21 @@ async function handleAuth(request, env) {
   if (!password) {
     return corsResponse(json({ ok: false, error: 'missing_password' }, 400));
   }
-  if (!env.APP_PASSWORD) {
+  if (!getConfiguredUsers(env).length) {
     return corsResponse(json({ ok: false, error: 'server_misconfigured' }, 500));
   }
-
-  if (password !== env.APP_PASSWORD) {
+  const user = resolveAuthUserByPassword(password, env);
+  if (!user) {
     await sleep(400);
     return corsResponse(json({ ok: false, error: 'wrong_password' }, 401));
   }
 
-  const token = await makeToken(env.APP_PASSWORD);
-  return corsResponse(json({ ok: true, token }, 200));
+  if (!user.secret) {
+    return corsResponse(json({ ok: false, error: 'server_misconfigured' }, 500));
+  }
+
+  const token = await makeToken(user.secret, user.scope);
+  return corsResponse(json({ ok: true, token, scope: user.scope, userLabel: user.label }, 200));
 }
 
 async function verifyToken(request, env) {
@@ -176,40 +206,70 @@ async function verifyToken(request, env) {
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
 
   if (!token) {
-    return json({ ok: false, error: 'unauthorized' }, 401);
+    return { error: json({ ok: false, error: 'unauthorized' }, 401) };
   }
 
-  const valid = await validateToken(token, env.APP_PASSWORD);
-  if (!valid) {
-    return json({ ok: false, error: 'invalid_token' }, 401);
+  const auth = await validateToken(token, env);
+  if (!auth) {
+    return { error: json({ ok: false, error: 'invalid_token' }, 401) };
   }
 
-  return null;
+  return auth;
 }
 
 // ══════════════════════════════════════════════════════════════
 //  TOKEN HELPERS
 // ══════════════════════════════════════════════════════════════
 
-async function makeToken(secret) {
+function getConfiguredUsers(env) {
+  const users = [];
+  if (env.APP_PASSWORD_MAIN) users.push({ scope: 'main', label: 'Основа', secret: env.APP_PASSWORD_MAIN });
+  if (env.APP_PASSWORD_DALNYK) users.push({ scope: 'dalnyk', label: 'Дальник', secret: env.APP_PASSWORD_DALNYK });
+  if (env.APP_PASSWORD) users.push({ scope: 'all', label: 'Адмін', secret: env.APP_PASSWORD });
+  return users;
+}
+
+function resolveAuthUserByPassword(password, env) {
+  return getConfiguredUsers(env).find(user => user.secret === password) || null;
+}
+
+function resolveAuthUserByScope(scope, env) {
+  return getConfiguredUsers(env).find(user => user.scope === scope) || null;
+}
+
+function parseToken(token) {
+  try {
+    const [b64, sig] = token.split('.');
+    if (!b64 || !sig) return null;
+    const payload = atob(b64);
+    const bits = payload.split(':');
+    if (bits[0] !== 'ogonh') return null;
+    if (bits.length === 2) {
+      const exp = parseInt(bits[1], 10);
+      return { payload, sig, scope: 'all', exp };
+    }
+    const exp = parseInt(bits[2], 10);
+    return { payload, sig, scope: bits[1] || 'all', exp };
+  } catch {
+    return null;
+  }
+}
+
+async function makeToken(secret, scope) {
   const exp = Date.now() + 30 * 24 * 60 * 60 * 1000;
-  const payload = `ogonh:${exp}`;
+  const payload = `ogonh:${scope}:${exp}`;
   const sig = await hmacHex(secret, payload);
   return btoa(payload) + '.' + sig;
 }
 
-async function validateToken(token, secret) {
-  try {
-    const [b64, sig] = token.split('.');
-    if (!b64 || !sig) return false;
-    const payload = atob(b64);
-    const exp = parseInt(payload.split(':')[1], 10);
-    if (isNaN(exp) || Date.now() > exp) return false;
-    const expected = await hmacHex(secret, payload);
-    return sig === expected;
-  } catch {
-    return false;
-  }
+async function validateToken(token, env) {
+  const parsed = parseToken(token);
+  if (!parsed || isNaN(parsed.exp) || Date.now() > parsed.exp) return null;
+  const user = resolveAuthUserByScope(parsed.scope, env);
+  if (!user || !user.secret) return null;
+  const expected = await hmacHex(user.secret, parsed.payload);
+  if (parsed.sig !== expected) return null;
+  return { scope: user.scope, userLabel: user.label };
 }
 
 async function hmacHex(secret, message) {

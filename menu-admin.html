@@ -139,6 +139,17 @@
     </div>
     <div class="controls-row">
       <input class="search-input" id="searchInput" type="text" placeholder="🔍 Назва страви..." oninput="applyFilter()" style="width:210px">
+      <select class="select field-select" id="menuSort" aria-label="Сортування страв" onchange="applyFilter()" style="width:auto">
+        <option value="default">Звичайний порядок</option>
+        <option value="newest">Спочатку нові</option>
+        <option value="oldest">Спочатку старі</option>
+      </select>
+      <select class="select field-select" id="photoSort" aria-label="Порядок за фото" onchange="applyFilter()" style="width:auto">
+        <option value="default">Фото: звичайний порядок</option>
+        <option value="missing">Спочатку без фото</option>
+        <option value="present">Спочатку з фото</option>
+      </select>
+      <button class="btn-ghost" onclick="openBatchPhotos()">Фото пакетом</button>
       <button class="btn-ghost" onclick="loadAll()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
         Оновити
@@ -147,6 +158,7 @@
   </div>
 
   <div class="filter-tabs" style="margin-bottom:18px">
+    <span style="font-size:12px;color:var(--text-muted)">Сортування діє лише тут. Страви з невідомою датою додавання — в кінці; наявність фото визначається за посиланням.</span>
     <button class="filter-tab active" data-f="all"    onclick="setStatusFilter(this)">Всі</button>
   </div>
 
@@ -421,6 +433,7 @@ function applyFilter() {
     list = list.filter(d => d.category_id === activeCatId);
   }
   if (q) list = list.filter(d => (d.name || '').toLowerCase().includes(q));
+  list = sortAdminDishes(list, document.getElementById('menuSort').value, document.getElementById('photoSort').value);
   renderDishes(list);
 }
 
@@ -733,14 +746,18 @@ async function deleteCategory() {
 
 // ── Modal helpers ──────────────────────────────────────────────
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id) {
+  if (id === 'batchPhotoModalBg') return closeBatchPhotos();
+  document.getElementById(id).classList.remove('open');
+}
 function bgClose(id, e) { if (e.target === document.getElementById(id)) closeModal(id); }
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal('dishModalBg'); closeModal('catModalBg'); }
+  if (e.key === 'Escape') { closeModal('dishModalBg'); closeModal('catModalBg'); closeBatchPhotos(); }
 });
 
 // ── Init ──────────────────────────────────────────────────────
-loadAll();
 </script>
+<script src="menu-admin-photos.js"></script>
+<script>loadAll();</script>
 </body>
 </html>
